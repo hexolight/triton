@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from app.core.ffmpeg_manager import find_ffmpeg
+from app.i18n import t
 
 # formats where re-encoding the video stream is pointless/lossy to skip when possible
 AUDIO_ONLY_EXTS = {"mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus", "aiff"}
@@ -32,7 +33,7 @@ def _duration_seconds(ffprobe: Path, src: Path) -> Optional[float]:
 def convert(src: Path, dst: Path, progress_cb: ProgressCB = None) -> None:
     ffmpeg, ffprobe = find_ffmpeg()
     if not ffmpeg:
-        raise RuntimeError("FFmpeg bulunamadı. Önce Ayarlar sekmesinden indirin.")
+        raise RuntimeError(t("err_ffmpeg_missing"))
 
     dst_ext = dst.suffix.lower().lstrip(".")
     cmd = [str(ffmpeg), "-y", "-i", str(src)]
@@ -67,4 +68,4 @@ def convert(src: Path, dst: Path, progress_cb: ProgressCB = None) -> None:
         if proc.returncode != 0:
             stderr_file.seek(0)
             err = stderr_file.read()[-1200:]
-            raise RuntimeError(f"FFmpeg hatası:\n{err}")
+            raise RuntimeError(t("err_ffmpeg_failed", detail=err))

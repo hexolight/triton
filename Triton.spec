@@ -1,5 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 from PyInstaller.utils.hooks import collect_all
+
+exe_name = os.environ.get('TRITON_EXE_NAME', 'Triton')
 
 datas = [('assets', 'assets')]
 binaries = []
@@ -33,7 +36,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='Triton',
+    name=exe_name,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

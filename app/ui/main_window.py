@@ -11,11 +11,12 @@ import customtkinter as ctk
 from PIL import Image
 
 from app.core import formats
-from app.core.job import Job
+from app.core.job import Job, STATUS_PENDING, STATUS_CONVERTING, STATUS_DONE, STATUS_ERROR
 from app.core.converter_registry import convert_file
 from app.core import ffmpeg_manager, libreoffice_manager
 from app.utils.paths import default_output_dir, staging_dir, assets_dir
 from app.ui import theme
+from app.i18n import t
 
 ctk.set_appearance_mode("dark")
 
@@ -72,7 +73,7 @@ class JobRow(ctk.CTkFrame):
         self.target_menu.grid(row=0, column=3, padx=(0, 10), pady=(10, 0))
 
         self.status_lbl = ctk.CTkLabel(
-            self, text=job.status, width=110,
+            self, text=t("status_label_pending"), width=110,
             text_color=theme.STATUS_COLORS.get(job.status, theme.TEXT_MUTED),
             font=(theme.FONT_FAMILY, 12),
         )
@@ -104,18 +105,18 @@ class JobRow(ctk.CTkFrame):
     def set_status(self, status: str, error: str | None = None) -> None:
         self.job.status = status
         self.job.error = error
-        if status == "Hata":
-            label = "Hata  (i)"
-        elif status == "Tamamlandı":
-            label = "İndir  ⬇"
+        if status == STATUS_ERROR:
+            label = t("status_error_action")
+        elif status == STATUS_DONE:
+            label = t("status_done_action")
         else:
-            label = status
-        cursor = "hand2" if status in ("Hata", "Tamamlandı") else ""
+            label = t(f"status_label_{status}")
+        cursor = "hand2" if status in (STATUS_ERROR, STATUS_DONE) else ""
         self.status_lbl.configure(
             text=label, text_color=theme.STATUS_COLORS.get(status, theme.TEXT_MUTED), cursor=cursor,
         )
 
-        if status == "Dönüştürülüyor...":
+        if status == STATUS_CONVERTING:
             self.progress_bar.configure(mode="indeterminate")
             self.progress_bar.grid(row=2, column=0, columnspan=6, sticky="ew", padx=14, pady=(0, 10))
             self.progress_bar.start()
@@ -124,27 +125,27 @@ class JobRow(ctk.CTkFrame):
             self.progress_bar.grid_forget()
 
     def set_progress(self, fraction: float) -> None:
-        if self.job.status != "Dönüştürülüyor...":
+        if self.job.status != STATUS_CONVERTING:
             return
         self.progress_bar.stop()
         self.progress_bar.configure(mode="determinate")
         self.progress_bar.set(max(0.0, min(1.0, fraction)))
 
     def _on_status_click(self) -> None:
-        if self.job.status == "Hata":
+        if self.job.status == STATUS_ERROR:
             self._show_error()
-        elif self.job.status == "Tamamlandı":
+        elif self.job.status == STATUS_DONE:
             self._on_download(self.job)
 
     def _show_error(self) -> None:
         if self.job.error:
-            messagebox.showerror(f"Dönüştürme hatası — {self.job.src.name}", self.job.error)
+            messagebox.showerror(t("conversion_error_title", name=self.job.src.name), self.job.error)
 
 
 class App(_BaseWindow):
     def __init__(self):
         super().__init__()
-        self.title("Triton")
+        self.title(t("app_title"))
         self.geometry("980x680")
         self.minsize(820, 560)
         self.configure(fg_color=theme.BG)
@@ -184,11 +185,11 @@ class App(_BaseWindow):
         title_col.pack(side="left")
 
         ctk.CTkLabel(
-            title_col, text="Triton", text_color=theme.TEXT,
+            title_col, text=t("app_title"), text_color=theme.TEXT,
             font=(theme.FONT_FAMILY, 25, "bold"), anchor="w",
         ).pack(anchor="w")
         ctk.CTkLabel(
-            title_col, text="yerel dosya dönüştürücü", text_color=theme.ACCENT,
+            title_col, text=t("app_tagline"), text_color=theme.ACCENT,
             font=(theme.FONT_FAMILY, 12, "bold"), anchor="w",
         ).pack(anchor="w")
 
@@ -202,8 +203,8 @@ class App(_BaseWindow):
             corner_radius=14,
         )
         self.tabview.pack(fill="both", expand=True, padx=24, pady=(12, 20))
-        self.tab_convert = self.tabview.add("Dönüştür")
-        self.tab_settings = self.tabview.add("Ayarlar")
+        self.tab_convert = self.tabview.add(t("tab_convert"))
+        self.tab_settings = self.tabview.add(t("tab_settings"))
 
         self._build_convert_tab(self.tab_convert)
         self._build_settings_tab(self.tab_settings)
@@ -213,21 +214,21 @@ class App(_BaseWindow):
         toolbar.pack(fill="x", padx=12, pady=(14, 6))
 
         ctk.CTkButton(
-            toolbar, text="+ Dosya Ekle", command=self._add_files,
+            toolbar, text=t("btn_add_files"), command=self._add_files,
             fg_color=theme.ACCENT, hover_color=theme.ACCENT_HOVER, width=120,
         ).pack(side="left", padx=(0, 8))
         ctk.CTkButton(
-            toolbar, text="+ Klasör Ekle", command=self._add_folder,
+            toolbar, text=t("btn_add_folder"), command=self._add_folder,
             fg_color=theme.BG_ROW, hover_color=theme.BG_ROW_HOVER, width=120,
         ).pack(side="left", padx=(0, 8))
         ctk.CTkButton(
-            toolbar, text="Listeyi Temizle", command=self._clear_all,
+            toolbar, text=t("btn_clear_list"), command=self._clear_all,
             fg_color=theme.BG_ROW, hover_color=theme.BG_ROW_HOVER, width=120,
         ).pack(side="left")
 
         self.drop_hint = ctk.CTkLabel(
             toolbar,
-            text="dosyaları buraya sürükleyip bırakabilirsin" if DND_AVAILABLE else "",
+            text=t("drop_hint") if DND_AVAILABLE else "",
             text_color=theme.TEXT_MUTED, font=(theme.FONT_FAMILY, 11, "italic"),
         )
         self.drop_hint.pack(side="right")
@@ -237,33 +238,33 @@ class App(_BaseWindow):
         self.scroll.grid_columnconfigure(0, weight=1)
 
         self.empty_lbl = ctk.CTkLabel(
-            self.scroll, text="Henüz dosya eklenmedi.", text_color=theme.TEXT_MUTED,
+            self.scroll, text=t("empty_list"), text_color=theme.TEXT_MUTED,
         )
         self.empty_lbl.grid(row=0, column=0, pady=40)
 
         bottom = ctk.CTkFrame(tab, fg_color="transparent")
         bottom.pack(fill="x", padx=12, pady=(6, 14))
 
-        ctk.CTkLabel(bottom, text="Varsayılan indirme klasörü:", text_color=theme.TEXT_MUTED).pack(side="left")
+        ctk.CTkLabel(bottom, text=t("default_download_folder"), text_color=theme.TEXT_MUTED).pack(side="left")
         self.out_dir_lbl = ctk.CTkLabel(
             bottom, text=str(self.out_dir), text_color=theme.TEXT,
             font=(theme.FONT_FAMILY, 11),
         )
         self.out_dir_lbl.pack(side="left", padx=(6, 10))
         ctk.CTkButton(
-            bottom, text="Gözat", width=70, command=self._choose_out_dir,
+            bottom, text=t("browse"), width=70, command=self._choose_out_dir,
             fg_color=theme.BG_ROW, hover_color=theme.BG_ROW_HOVER,
         ).pack(side="left")
 
         self.convert_btn = ctk.CTkButton(
-            bottom, text="Dönüştür", command=self._start_conversion,
+            bottom, text=t("convert"), command=self._start_conversion,
             fg_color=theme.ACCENT, hover_color=theme.ACCENT_HOVER, width=140, height=36,
             font=(theme.FONT_FAMILY, 14, "bold"),
         )
         self.convert_btn.pack(side="right")
 
         self.download_all_btn = ctk.CTkButton(
-            bottom, text="Tümünü İndir", command=self._download_all,
+            bottom, text=t("download_all"), command=self._download_all,
             fg_color=theme.BG_ROW, hover_color=theme.BG_ROW_HOVER, width=130, height=36,
         )
         self.download_all_btn.pack(side="right", padx=(0, 10))
@@ -311,18 +312,15 @@ class App(_BaseWindow):
         wrap.pack(fill="both", expand=True, padx=20, pady=20)
 
         ctk.CTkLabel(
-            wrap, text="Dönüştürme motorları", text_color=theme.TEXT,
+            wrap, text=t("engines_title"), text_color=theme.TEXT,
             font=(theme.FONT_FAMILY, 17, "bold"), anchor="w",
         ).pack(anchor="w", pady=(0, 14))
 
         self.ffmpeg_dot, self.ffmpeg_status_lbl, self.ffmpeg_btn = self._build_engine_card(
-            wrap, "FFmpeg", "Video ve ses dönüşümleri için. Yalnızca uygulama klasörüne "
-            "indirilir, sisteme kurulmaz.", self._install_ffmpeg,
+            wrap, t("engine_ffmpeg_name"), t("engine_ffmpeg_desc"), self._install_ffmpeg,
         )
         self.lo_dot, self.lo_status_lbl, self.lo_btn = self._build_engine_card(
-            wrap, "LibreOffice", "Word / Excel / PowerPoint dönüşümleri için. PDF ↔ görsel "
-            "ve PDF → Word bunsuz da çalışır — yalnızca ofis belgelerini PDF'e "
-            "çevirmek için gerekir.", self._install_libreoffice,
+            wrap, t("engine_libreoffice_name"), t("engine_libreoffice_desc"), self._install_libreoffice,
         )
 
         self._refresh_engine_status()
@@ -370,13 +368,13 @@ class App(_BaseWindow):
     def _add_files(self) -> None:
         exts = " ".join(f"*.{e}" for e in formats.all_extensions())
         paths = filedialog.askopenfilenames(
-            title="Dosya seç",
-            filetypes=[("Desteklenen dosyalar", exts), ("Tüm dosyalar", "*.*")],
+            title=t("dialog_select_file"),
+            filetypes=[(t("dialog_supported_files"), exts), (t("dialog_all_files"), "*.*")],
         )
         self._add_paths(list(paths))
 
     def _add_folder(self) -> None:
-        folder = filedialog.askdirectory(title="Klasör seç")
+        folder = filedialog.askdirectory(title=t("dialog_select_folder"))
         if not folder:
             return
         exts = set(formats.all_extensions())
@@ -388,7 +386,7 @@ class App(_BaseWindow):
         self._add_paths(list(raw))
 
     def _choose_out_dir(self) -> None:
-        folder = filedialog.askdirectory(title="Varsayılan indirme klasörü seç", initialdir=str(self.out_dir))
+        folder = filedialog.askdirectory(title=t("dialog_select_default_folder"), initialdir=str(self.out_dir))
         if folder:
             self.out_dir = Path(folder)
             self.out_dir_lbl.configure(text=str(self.out_dir))
@@ -403,10 +401,10 @@ class App(_BaseWindow):
             pass
 
     def _download_one(self, job) -> None:
-        if job.status != "Tamamlandı" or not job.dst or not job.dst.exists():
+        if job.status != STATUS_DONE or not job.dst or not job.dst.exists():
             return
         path = filedialog.asksaveasfilename(
-            title="Farklı kaydet",
+            title=t("dialog_save_as"),
             initialdir=str(self.out_dir),
             initialfile=job.dst.name,
             defaultextension=f".{job.target_ext}",
@@ -420,12 +418,12 @@ class App(_BaseWindow):
         self._reveal_in_explorer(dest)
 
     def _download_all(self) -> None:
-        completed = [row.job for row in self.rows if row.job.status == "Tamamlandı" and row.job.dst and row.job.dst.exists()]
+        completed = [row.job for row in self.rows if row.job.status == STATUS_DONE and row.job.dst and row.job.dst.exists()]
         if not completed:
-            messagebox.showinfo("Triton", "İndirilecek tamamlanmış dosya yok.")
+            messagebox.showinfo(t("app_title"), t("no_files_to_download"))
             return
 
-        folder = filedialog.askdirectory(title="İndirme klasörü seç", initialdir=str(self.out_dir))
+        folder = filedialog.askdirectory(title=t("dialog_select_download_folder"), initialdir=str(self.out_dir))
         if not folder:
             return
 
@@ -438,27 +436,25 @@ class App(_BaseWindow):
         self._reveal_in_explorer(dest_dir)
 
     def _update_summary(self) -> None:
-        self.summary_lbl.configure(text=f"{len(self.rows)} dosya")
+        self.summary_lbl.configure(text=t("file_count", count=len(self.rows)))
 
     # ---------------------------------------------------------- conversion
     def _start_conversion(self) -> None:
         if self._converting:
             return
         if not self.rows:
-            messagebox.showinfo("Triton", "Önce dönüştürülecek dosya ekleyin.")
+            messagebox.showinfo(t("app_title"), t("add_files_first"))
             return
 
         missing = self._missing_engines()
         if missing:
             messagebox.showwarning(
-                "Eksik bileşen",
-                "Şu motorlar hazır değil: " + ", ".join(missing) +
-                "\nAyarlar sekmesinden kurabilirsiniz. Bu motoru gerektirmeyen "
-                "dosyalar yine de dönüştürülecek.",
+                t("missing_engine_title"),
+                t("missing_engine_body", engines=", ".join(missing)),
             )
 
         self._converting = True
-        self.convert_btn.configure(state="disabled", text="Dönüştürülüyor...")
+        self.convert_btn.configure(state="disabled", text=t("converting_btn"))
 
         jobs = [row.job for row in self.rows]
         rows_by_job = {id(row.job): row for row in self.rows}
@@ -467,7 +463,7 @@ class App(_BaseWindow):
         def worker():
             done, failed = 0, 0
             for job in jobs:
-                self._ui_queue.put(("status", id(job), "Dönüştürülüyor...", None))
+                self._ui_queue.put(("status", id(job), STATUS_CONVERTING, None))
                 try:
                     dst = job.output_path(stage_dir)
                     if dst.exists():
@@ -478,10 +474,10 @@ class App(_BaseWindow):
 
                     convert_file(job.src, dst, progress_cb=progress_cb)
                     job.dst = dst
-                    self._ui_queue.put(("status", id(job), "Tamamlandı", None))
+                    self._ui_queue.put(("status", id(job), STATUS_DONE, None))
                     done += 1
                 except Exception as exc:  # noqa: BLE001
-                    self._ui_queue.put(("status", id(job), "Hata", str(exc)))
+                    self._ui_queue.put(("status", id(job), STATUS_ERROR, str(exc)))
                     failed += 1
             self._ui_queue.put(("finished", None, done, failed))
 
@@ -520,8 +516,8 @@ class App(_BaseWindow):
                 elif kind == "finished":
                     _, _, done, failed = item
                     self._converting = False
-                    self.convert_btn.configure(state="normal", text="Dönüştür")
-                    self.summary_lbl.configure(text=f"{done} tamamlandı, {failed} hata")
+                    self.convert_btn.configure(state="normal", text=t("convert"))
+                    self.summary_lbl.configure(text=t("summary_result", done=done, failed=failed))
                 elif kind == "engine_status":
                     self._refresh_engine_status()
                 elif kind == "text_status":
@@ -540,22 +536,22 @@ class App(_BaseWindow):
     # ------------------------------------------------------------- engines
     def _refresh_engine_status(self) -> None:
         if ffmpeg_manager.is_ready():
-            self.ffmpeg_status_lbl.configure(text="Hazır", text_color=theme.SUCCESS)
+            self.ffmpeg_status_lbl.configure(text=t("engine_ready"), text_color=theme.SUCCESS)
             self.ffmpeg_dot.configure(text_color=theme.SUCCESS)
-            self.ffmpeg_btn.configure(text="Yeniden Kontrol Et")
+            self.ffmpeg_btn.configure(text=t("engine_recheck"))
         else:
-            self.ffmpeg_status_lbl.configure(text="Kurulu değil", text_color=theme.TEXT_MUTED)
+            self.ffmpeg_status_lbl.configure(text=t("engine_not_ready"), text_color=theme.TEXT_MUTED)
             self.ffmpeg_dot.configure(text_color=theme.TEXT_MUTED)
-            self.ffmpeg_btn.configure(text="İndir")
+            self.ffmpeg_btn.configure(text=t("engine_download"))
 
         if libreoffice_manager.is_ready():
-            self.lo_status_lbl.configure(text="Hazır", text_color=theme.SUCCESS)
+            self.lo_status_lbl.configure(text=t("engine_ready"), text_color=theme.SUCCESS)
             self.lo_dot.configure(text_color=theme.SUCCESS)
-            self.lo_btn.configure(text="Yeniden Kontrol Et")
+            self.lo_btn.configure(text=t("engine_recheck"))
         else:
-            self.lo_status_lbl.configure(text="Kurulu değil", text_color=theme.TEXT_MUTED)
+            self.lo_status_lbl.configure(text=t("engine_not_ready"), text_color=theme.TEXT_MUTED)
             self.lo_dot.configure(text_color=theme.TEXT_MUTED)
-            self.lo_btn.configure(text="Kur")
+            self.lo_btn.configure(text=t("engine_install"))
 
     def _install_ffmpeg(self) -> None:
         self.ffmpeg_btn.configure(state="disabled")
@@ -567,8 +563,8 @@ class App(_BaseWindow):
             try:
                 ffmpeg_manager.ensure_ffmpeg(status_cb)
             except Exception as exc:  # noqa: BLE001
-                status_cb(f"Hata: {exc}")
-                self._ui_queue.put(("error_popup", "FFmpeg indirilemedi", str(exc)))
+                status_cb(f"{t('ffmpeg_download_failed_title')}: {exc}")
+                self._ui_queue.put(("error_popup", t("ffmpeg_download_failed_title"), str(exc)))
             self._ui_queue.put(("engine_status",))
             self.ffmpeg_btn.configure(state="normal")
 
@@ -577,17 +573,12 @@ class App(_BaseWindow):
     def _install_libreoffice(self) -> None:
         if libreoffice_manager.is_ready():
             self._refresh_engine_status()
-            messagebox.showinfo("Triton", "LibreOffice zaten hazır.")
+            messagebox.showinfo(t("app_title"), t("libreoffice_already_ready"))
             return
 
         libreoffice_manager.open_download_page()
-        self.lo_btn.configure(text="Yeniden Kontrol Et")
-        messagebox.showinfo(
-            "LibreOffice kurulumu",
-            "Tarayıcınızda LibreOffice'in resmi indirme sayfası açıldı.\n\n"
-            "İndirdiğiniz .msi dosyasını çalıştırıp kurulumu tamamlayın, "
-            "ardından bu sekmedeki 'Yeniden Kontrol Et' butonuna tekrar basın.",
-        )
+        self.lo_btn.configure(text=t("engine_recheck"))
+        messagebox.showinfo(t("libreoffice_setup_title"), t("libreoffice_setup_body"))
 
 
 def run() -> None:

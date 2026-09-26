@@ -15,10 +15,10 @@ class Engine(Enum):
 
 
 class Category(Enum):
-    VIDEO = "Video"
-    AUDIO = "Ses"
-    IMAGE = "Görsel"
-    DOCUMENT = "Belge"
+    VIDEO = "video"
+    AUDIO = "audio"
+    IMAGE = "image"
+    DOCUMENT = "document"
 
 
 @dataclass(frozen=True)

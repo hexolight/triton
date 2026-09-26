@@ -4,6 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 from PIL import Image
 
+from app.i18n import t
+
 # Pillow needs RGB (no alpha) for these formats
 _NO_ALPHA = {"jpg", "jpeg", "bmp"}
 
@@ -23,7 +25,7 @@ def convert(src: Path, dst: Path) -> None:
     dst_ext = dst.suffix.lower().lstrip(".")
     fmt = _SAVE_FORMAT.get(dst_ext)
     if not fmt:
-        raise RuntimeError(f"Desteklenmeyen görsel formatı: {dst_ext}")
+        raise RuntimeError(t("err_unsupported_image_format", ext=dst_ext))
 
     with Image.open(src) as im:
         if dst_ext in _NO_ALPHA and im.mode in ("RGBA", "LA", "P"):

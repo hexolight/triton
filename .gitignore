@@ -6,3 +6,4 @@ test_tmp/
 assets/_screenshot*.png
 build/
 dist/
+app/_lang_default.py

@@ -6,12 +6,13 @@ import subprocess
 from pathlib import Path
 
 from app.core.libreoffice_manager import find_libreoffice
+from app.i18n import t
 
 
 def convert(src: Path, dst: Path) -> None:
     soffice = find_libreoffice()
     if not soffice:
-        raise RuntimeError("LibreOffice bulunamadı. Önce Ayarlar sekmesinden kurun.")
+        raise RuntimeError(t("err_libreoffice_missing"))
 
     dst_ext = dst.suffix.lower().lstrip(".")
     outdir = dst.parent
@@ -31,7 +32,7 @@ def convert(src: Path, dst: Path) -> None:
     )
     if proc.returncode != 0:
         err = proc.stderr.decode(errors="ignore")[-1200:]
-        raise RuntimeError(f"LibreOffice hatası:\n{err}")
+        raise RuntimeError(t("err_libreoffice_failed", detail=err))
 
     # LibreOffice names its output after the source file stem, not dst's name
     produced = outdir / f"{src.stem}.{dst_ext}"
@@ -39,4 +40,4 @@ def convert(src: Path, dst: Path) -> None:
         produced.replace(dst)
 
     if not dst.exists():
-        raise RuntimeError("LibreOffice çıktı dosyası oluşturmadı.")
+        raise RuntimeError(t("err_libreoffice_no_output"))

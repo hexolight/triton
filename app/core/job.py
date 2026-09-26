@@ -1,14 +1,19 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+
+STATUS_PENDING = "pending"
+STATUS_CONVERTING = "converting"
+STATUS_DONE = "done"
+STATUS_ERROR = "error"
 
 
 @dataclass
 class Job:
     src: Path
     target_ext: str
-    status: str = "Bekliyor"
+    status: str = STATUS_PENDING
     error: Optional[str] = None
     dst: Optional[Path] = None
 

@@ -10,6 +10,7 @@ from typing import Callable, Optional
 
 from app.utils.paths import bin_dir
 from app.utils.downloader import download_file, extract_zip
+from app.i18n import t
 
 FFMPEG_ZIP_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 
@@ -48,13 +49,10 @@ def ensure_ffmpeg(status_cb: ProgressCB = None) -> tuple[Path, Path]:
         return ffmpeg, ffprobe
 
     if platform.system() != "Windows":
-        raise RuntimeError(
-            "FFmpeg otomatik indirme yalnızca Windows için yapılandırıldı. "
-            "Lütfen ffmpeg'i sisteminize kurup PATH'e ekleyin."
-        )
+        raise RuntimeError(t("err_ffmpeg_windows_only"))
 
     if status_cb:
-        status_cb("FFmpeg indiriliyor...")
+        status_cb(t("ffmpeg_downloading"))
 
     dest_dir = bin_dir()
     zip_path = dest_dir / "_ffmpeg_download.zip"
@@ -62,12 +60,12 @@ def ensure_ffmpeg(status_cb: ProgressCB = None) -> tuple[Path, Path]:
     def _progress(done: int, total: int) -> None:
         if status_cb and total:
             pct = int(done * 100 / total)
-            status_cb(f"FFmpeg indiriliyor... %{pct}")
+            status_cb(t("ffmpeg_downloading_pct", pct=pct))
 
     download_file(FFMPEG_ZIP_URL, zip_path, progress=_progress)
 
     if status_cb:
-        status_cb("FFmpeg çıkarılıyor...")
+        status_cb(t("ffmpeg_extracting"))
 
     extract_root = dest_dir / "_ffmpeg_extract"
     extract_zip(zip_path, extract_root)
@@ -75,7 +73,7 @@ def ensure_ffmpeg(status_cb: ProgressCB = None) -> tuple[Path, Path]:
     found_ffmpeg = next(extract_root.rglob("ffmpeg.exe"), None)
     found_ffprobe = next(extract_root.rglob("ffprobe.exe"), None)
     if not found_ffmpeg or not found_ffprobe:
-        raise RuntimeError("İndirilen FFmpeg paketi içinde çalıştırılabilir dosyalar bulunamadı.")
+        raise RuntimeError(t("err_ffmpeg_bad_package"))
 
     target_ffmpeg, target_ffprobe = _bundled_paths()
     shutil.copy2(found_ffmpeg, target_ffmpeg)
@@ -85,6 +83,6 @@ def ensure_ffmpeg(status_cb: ProgressCB = None) -> tuple[Path, Path]:
     zip_path.unlink(missing_ok=True)
 
     if status_cb:
-        status_cb("FFmpeg hazır.")
+        status_cb(t("ffmpeg_ready_status"))
 
     return target_ffmpeg, target_ffprobe

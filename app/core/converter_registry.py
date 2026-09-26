@@ -6,6 +6,7 @@ from typing import Callable, Optional
 
 from app.core.formats import Engine, engine_for
 from app.converters import video_audio, image, pdf, pdf_docx, office
+from app.i18n import t
 
 _DISPATCH = {
     Engine.FFMPEG: video_audio.convert,
@@ -25,7 +26,7 @@ def convert_file(src: Path, dst: Path, progress_cb: Optional[Callable[[float], N
     dst_ext = dst.suffix.lstrip(".")
     engine = engine_for(src_ext, dst_ext)
     if engine is None:
-        raise RuntimeError(f"{src_ext.upper()} -> {dst_ext.upper()} dönüşümü desteklenmiyor.")
+        raise RuntimeError(t("err_unsupported_conversion", src=src_ext.upper(), dst=dst_ext.upper()))
 
     fn = _DISPATCH[engine]
     dst.parent.mkdir(parents=True, exist_ok=True)

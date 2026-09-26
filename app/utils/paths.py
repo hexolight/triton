@@ -5,6 +5,8 @@ import os
 import sys
 from pathlib import Path
 
+from app.i18n import t
+
 
 def app_data_dir() -> Path:
     """Per-user folder where downloaded binaries/config live.
@@ -23,7 +25,7 @@ def bin_dir() -> Path:
 
 def default_output_dir() -> Path:
     """Suggested folder shown in the save dialog — not written to automatically."""
-    d = Path.home() / "Desktop" / "Triton Çıktıları"
+    d = Path.home() / "Desktop" / t("output_folder_name")
     d.mkdir(parents=True, exist_ok=True)
     return d
 

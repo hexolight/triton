@@ -5,6 +5,8 @@ from pathlib import Path
 from PIL import Image
 import pymupdf as fitz
 
+from app.i18n import t
+
 RENDER_DPI = 200
 
 
@@ -43,4 +45,4 @@ def convert(src: Path, dst: Path) -> None:
     elif dst_ext == "pdf":
         image_to_pdf(src, dst)
     else:
-        raise RuntimeError(f"Desteklenmeyen PDF dönüşümü: {src_ext} -> {dst_ext}")
+        raise RuntimeError(t("err_unsupported_pdf_conversion", src=src_ext, dst=dst_ext))
