@@ -37,14 +37,20 @@ py -3 -m venv .venv
 .venv\Scripts\python main.py
 ```
 
+## Diller
+
+Arayüz Türkçe ve İngilizce olarak mevcut (`app/i18n.py`). Geliştirirken
+`TRITON_LANG=en` ortam değişkeniyle geçici olarak değiştirilebilir.
+
 ## .exe derleme
 
 ```
 .venv\Scripts\pip install pyinstaller
-.venv\Scripts\python build.py
+.venv\Scripts\python build.py            # Türkçe: dist\Triton.exe
+.venv\Scripts\python build.py --lang en  # İngilizce: dist\Triton-EN.exe
 ```
 
-Çıktı `dist\Triton.exe` olarak tek dosya halinde oluşur (~100 MB, opencv/numpy/
-PyMuPDF gibi bağımlılıklar dahil). `Triton.spec` dosyası derleme ayarlarını
-tutar; `assets/` klasörü ve gerekli özel paketler (`customtkinter`,
-`tkinterdnd2`, `pymupdf`) otomatik olarak pakete dahil edilir.
+Her biri tek dosya halinde oluşur (~100 MB, opencv/numpy/PyMuPDF gibi
+bağımlılıklar dahil). `Triton.spec` dosyası derleme ayarlarını tutar;
+`assets/` klasörü ve gerekli özel paketler (`customtkinter`, `tkinterdnd2`,
+`pymupdf`) otomatik olarak pakete dahil edilir.
