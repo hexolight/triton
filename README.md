@@ -61,6 +61,13 @@ bağımlılıklar dahil). `Triton.spec` dosyası derleme ayarlarını tutar;
 `assets/` klasörü ve gerekli özel paketler (`customtkinter`, `tkinterdnd2`,
 `pymupdf`) otomatik olarak pakete dahil edilir.
 
+### Lisans
+
+Tüm hakları saklıdır (All Rights Reserved). Kaynak kod yalnızca
+görüntüleme amaçlıdır; kopyalanamaz, değiştirilemez veya dağıtılamaz.
+Derlenmiş uygulama kişisel, ticari olmayan kullanım için olduğu gibi
+kullanılabilir. Ayrıntılar için [LICENSE](LICENSE) dosyasına bakın.
+
 ---
 
 ## English
@@ -121,3 +128,10 @@ Each build is a single file (~100 MB, includes dependencies like
 opencv/numpy/PyMuPDF). `Triton.spec` holds the build configuration; the
 `assets/` folder and the packages that need explicit collection
 (`customtkinter`, `tkinterdnd2`, `pymupdf`) are bundled in automatically.
+
+### License
+
+All Rights Reserved. The source code is provided for viewing purposes
+only and may not be copied, modified, or distributed. The compiled
+application may be used as-is for personal, non-commercial purposes. See
+[LICENSE](LICENSE) for details.
