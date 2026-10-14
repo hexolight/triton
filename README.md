@@ -43,6 +43,13 @@ py -3 -m venv .venv
 .venv\Scripts\python main.py
 ```
 
+Testler (görsel/PDF dönüştürücüleri ve geçici dosya yönetimi):
+
+```
+.venv\Scripts\pip install -r requirements-dev.txt
+.venv\Scripts\python -m pytest
+```
+
 ### Diller
 
 Arayüz Türkçe ve İngilizce olarak mevcut (`app/i18n.py`). Geliştirirken
@@ -108,6 +115,13 @@ On first launch it creates a virtual environment and installs dependencies autom
 py -3 -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 .venv\Scripts\python main.py
+```
+
+Tests (image/PDF converters and staging-file handling):
+
+```
+.venv\Scripts\pip install -r requirements-dev.txt
+.venv\Scripts\python -m pytest
 ```
 
 ### Languages

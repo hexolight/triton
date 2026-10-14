@@ -1,5 +1,6 @@
 from __future__ import annotations
-from dataclasses import dataclass
+import shutil
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -16,6 +17,10 @@ class Job:
     status: str = STATUS_PENDING
     error: Optional[str] = None
     dst: Optional[Path] = None
+    # every file the conversion produced (more than one for PDF -> image),
+    # all living in work_dir until the user downloads them
+    outputs: list[Path] = field(default_factory=list)
+    work_dir: Optional[Path] = None
 
     @property
     def src_ext(self) -> str:
@@ -23,3 +28,11 @@ class Job:
 
     def output_path(self, out_dir: Path) -> Path:
         return out_dir / f"{self.src.stem}.{self.target_ext}"
+
+    def cleanup(self) -> None:
+        """Delete this job's staged output and forget it."""
+        if self.work_dir:
+            shutil.rmtree(self.work_dir, ignore_errors=True)
+        self.work_dir = None
+        self.dst = None
+        self.outputs = []

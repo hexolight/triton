@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 import os
+import shutil
 import sys
+import time
+import uuid
 from pathlib import Path
 
 from app.i18n import t
@@ -36,6 +39,32 @@ def staging_dir() -> Path:
     d = app_data_dir() / "staging"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def new_job_dir() -> Path:
+    """A fresh, unique folder inside staging for one job's output, so jobs
+    that share a file name (a/photo.png, b/photo.png) never overwrite each
+    other and multi-file results (PDF pages) stay together."""
+    d = staging_dir() / uuid.uuid4().hex
+    d.mkdir(parents=True)
+    return d
+
+
+def purge_stale_staging(max_age_hours: float = 24) -> None:
+    """Delete staging leftovers from earlier sessions (crashes, force-quits).
+    Only entries older than `max_age_hours` are touched so a second running
+    instance keeps its files."""
+    cutoff = time.time() - max_age_hours * 3600
+    for entry in staging_dir().iterdir():
+        try:
+            if entry.stat().st_mtime >= cutoff:
+                continue
+            if entry.is_dir():
+                shutil.rmtree(entry, ignore_errors=True)
+            else:
+                entry.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def project_root() -> Path:

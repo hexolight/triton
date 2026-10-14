@@ -5,16 +5,17 @@ import shutil
 import subprocess
 import threading
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import TclError, filedialog, messagebox
 
 import customtkinter as ctk
 from PIL import Image
 
 from app.core import formats
-from app.core.job import Job, STATUS_PENDING, STATUS_CONVERTING, STATUS_DONE, STATUS_ERROR
+from app.core.job import Job, STATUS_CONVERTING, STATUS_DONE, STATUS_ERROR
 from app.core.converter_registry import convert_file
 from app.core import ffmpeg_manager, libreoffice_manager
-from app.utils.paths import default_output_dir, staging_dir, assets_dir
+from app.utils.files import unique_path
+from app.utils.paths import default_output_dir, new_job_dir, purge_stale_staging, assets_dir
 from app.ui import theme
 from app.i18n import t
 
@@ -153,8 +154,11 @@ class App(_BaseWindow):
         self.rows: list[JobRow] = []
         self.out_dir = default_output_dir()
         self._ui_queue: queue.Queue = queue.Queue()
+        self._rows_by_job: dict[int, JobRow] = {}
         self._converting = False
 
+        purge_stale_staging()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._set_window_icon()
         self._build_layout()
         self._poll_ui_queue()
@@ -162,6 +166,11 @@ class App(_BaseWindow):
         if DND_AVAILABLE:
             self.drop_target_register(DND_FILES)
             self.dnd_bind("<<Drop>>", self._on_drop)
+
+    def _on_close(self) -> None:
+        for row in self.rows:
+            row.job.cleanup()
+        self.destroy()
 
     # ------------------------------------------------------------------ UI
     def _set_window_icon(self) -> None:
@@ -350,8 +359,17 @@ class App(_BaseWindow):
         for i, row in enumerate(self.rows):
             row.grid(row=i, column=0, sticky="ew", pady=4, padx=2)
 
-    def _remove_row(self, row: JobRow) -> None:
+    def _forget_row(self, row: JobRow) -> None:
+        """Drop a row for good: later queue messages for its job are ignored
+        and its staged output is deleted (unless it is converting right now,
+        in which case the worker still owns the folder)."""
+        self._rows_by_job.pop(id(row.job), None)
+        if row.job.status != STATUS_CONVERTING:
+            row.job.cleanup()
         row.destroy()
+
+    def _remove_row(self, row: JobRow) -> None:
+        self._forget_row(row)
         self.rows.remove(row)
         if not self.rows:
             self.empty_lbl.grid(row=0, column=0, pady=40)
@@ -360,7 +378,7 @@ class App(_BaseWindow):
 
     def _clear_all(self) -> None:
         for row in self.rows:
-            row.destroy()
+            self._forget_row(row)
         self.rows.clear()
         self.empty_lbl.grid(row=0, column=0, pady=40)
         self._update_summary()
@@ -400,25 +418,42 @@ class App(_BaseWindow):
         except OSError:
             pass
 
+    @staticmethod
+    def _existing_outputs(job: Job) -> list[Path]:
+        return [p for p in job.outputs if p.exists()]
+
     def _download_one(self, job) -> None:
-        if job.status != STATUS_DONE or not job.dst or not job.dst.exists():
+        outputs = self._existing_outputs(job)
+        if job.status != STATUS_DONE or not outputs:
             return
+
+        if len(outputs) > 1:
+            # e.g. a multi-page PDF rendered to one image per page
+            folder = filedialog.askdirectory(title=t("dialog_select_download_folder"), initialdir=str(self.out_dir))
+            if not folder:
+                return
+            dest_dir = Path(folder)
+            for out in outputs:
+                shutil.copy2(out, unique_path(dest_dir / out.name))
+            self._set_out_dir(dest_dir)
+            self._reveal_in_explorer(dest_dir)
+            return
+
         path = filedialog.asksaveasfilename(
             title=t("dialog_save_as"),
             initialdir=str(self.out_dir),
-            initialfile=job.dst.name,
+            initialfile=outputs[0].name,
             defaultextension=f".{job.target_ext}",
         )
         if not path:
             return
         dest = Path(path)
-        shutil.copy2(job.dst, dest)
-        self.out_dir = dest.parent
-        self.out_dir_lbl.configure(text=str(self.out_dir))
+        shutil.copy2(outputs[0], dest)
+        self._set_out_dir(dest.parent)
         self._reveal_in_explorer(dest)
 
     def _download_all(self) -> None:
-        completed = [row.job for row in self.rows if row.job.status == STATUS_DONE and row.job.dst and row.job.dst.exists()]
+        completed = [row.job for row in self.rows if row.job.status == STATUS_DONE and self._existing_outputs(row.job)]
         if not completed:
             messagebox.showinfo(t("app_title"), t("no_files_to_download"))
             return
@@ -429,11 +464,16 @@ class App(_BaseWindow):
 
         dest_dir = Path(folder)
         for job in completed:
-            shutil.copy2(job.dst, dest_dir / job.dst.name)
+            for out in self._existing_outputs(job):
+                # same-named results (a/foto.png, b/foto.png) must not overwrite each other
+                shutil.copy2(out, unique_path(dest_dir / out.name))
 
-        self.out_dir = dest_dir
-        self.out_dir_lbl.configure(text=str(self.out_dir))
+        self._set_out_dir(dest_dir)
         self._reveal_in_explorer(dest_dir)
+
+    def _set_out_dir(self, folder: Path) -> None:
+        self.out_dir = folder
+        self.out_dir_lbl.configure(text=str(folder))
 
     def _update_summary(self) -> None:
         self.summary_lbl.configure(text=t("file_count", count=len(self.rows)))
@@ -457,31 +497,37 @@ class App(_BaseWindow):
         self.convert_btn.configure(state="disabled", text=t("converting_btn"))
 
         jobs = [row.job for row in self.rows]
-        rows_by_job = {id(row.job): row for row in self.rows}
-        stage_dir = staging_dir()
+        self._rows_by_job = {id(row.job): row for row in self.rows}
 
         def worker():
             done, failed = 0, 0
             for job in jobs:
+                if id(job) not in self._rows_by_job:
+                    continue  # row was removed while waiting in the queue
                 self._ui_queue.put(("status", id(job), STATUS_CONVERTING, None))
+                job.cleanup()  # drop the output of an earlier run of this job
+                work_dir = None
                 try:
-                    dst = job.output_path(stage_dir)
-                    if dst.exists():
-                        dst.unlink()
+                    work_dir = new_job_dir()
+                    dst = job.output_path(work_dir)
 
                     def progress_cb(fraction: float, _job=job) -> None:
                         self._ui_queue.put(("progress", id(_job), fraction))
 
-                    convert_file(job.src, dst, progress_cb=progress_cb)
-                    job.dst = dst
+                    outputs = convert_file(job.src, dst, progress_cb=progress_cb)
+                    if id(job) not in self._rows_by_job:
+                        shutil.rmtree(work_dir, ignore_errors=True)  # removed mid-conversion
+                        continue
+                    job.work_dir, job.dst, job.outputs = work_dir, dst, outputs
                     self._ui_queue.put(("status", id(job), STATUS_DONE, None))
                     done += 1
                 except Exception as exc:  # noqa: BLE001
+                    if work_dir:
+                        shutil.rmtree(work_dir, ignore_errors=True)
                     self._ui_queue.put(("status", id(job), STATUS_ERROR, str(exc)))
                     failed += 1
             self._ui_queue.put(("finished", None, done, failed))
 
-        self._rows_by_job = rows_by_job
         threading.Thread(target=worker, daemon=True).start()
 
     def _missing_engines(self) -> list[str]:
@@ -501,37 +547,48 @@ class App(_BaseWindow):
     def _poll_ui_queue(self) -> None:
         try:
             while True:
-                item = self._ui_queue.get_nowait()
-                kind = item[0]
-                if kind == "status":
-                    _, job_id, status, error = item
-                    row = self._rows_by_job.get(job_id)
-                    if row:
-                        row.set_status(status, error)
-                elif kind == "progress":
-                    _, job_id, fraction = item
-                    row = self._rows_by_job.get(job_id)
-                    if row:
-                        row.set_progress(fraction)
-                elif kind == "finished":
-                    _, _, done, failed = item
-                    self._converting = False
-                    self.convert_btn.configure(state="normal", text=t("convert"))
-                    self.summary_lbl.configure(text=t("summary_result", done=done, failed=failed))
-                elif kind == "engine_status":
-                    self._refresh_engine_status()
-                elif kind == "text_status":
-                    _, target, text = item
-                    if target == "ffmpeg":
-                        self.ffmpeg_status_lbl.configure(text=text)
-                    else:
-                        self.lo_status_lbl.configure(text=text)
-                elif kind == "error_popup":
-                    _, title, text = item
-                    messagebox.showerror(title, text)
-        except queue.Empty:
-            pass
-        self.after(120, self._poll_ui_queue)
+                try:
+                    item = self._ui_queue.get_nowait()
+                except queue.Empty:
+                    break
+                try:
+                    self._handle_ui_item(item)
+                except TclError:
+                    pass  # widget was destroyed after the message was queued
+        finally:
+            # must always reschedule, or the UI would stop updating for good
+            self.after(120, self._poll_ui_queue)
+
+    def _handle_ui_item(self, item: tuple) -> None:
+        kind = item[0]
+        if kind == "status":
+            _, job_id, status, error = item
+            row = self._rows_by_job.get(job_id)
+            if row:
+                row.set_status(status, error)
+        elif kind == "progress":
+            _, job_id, fraction = item
+            row = self._rows_by_job.get(job_id)
+            if row:
+                row.set_progress(fraction)
+        elif kind == "finished":
+            _, _, done, failed = item
+            self._converting = False
+            self.convert_btn.configure(state="normal", text=t("convert"))
+            self.summary_lbl.configure(text=t("summary_result", done=done, failed=failed))
+        elif kind == "engine_status":
+            self._refresh_engine_status()
+        elif kind == "ffmpeg_btn_enable":
+            self.ffmpeg_btn.configure(state="normal")
+        elif kind == "text_status":
+            _, target, text = item
+            if target == "ffmpeg":
+                self.ffmpeg_status_lbl.configure(text=text)
+            else:
+                self.lo_status_lbl.configure(text=text)
+        elif kind == "error_popup":
+            _, title, text = item
+            messagebox.showerror(title, text)
 
     # ------------------------------------------------------------- engines
     def _refresh_engine_status(self) -> None:
@@ -566,7 +623,7 @@ class App(_BaseWindow):
                 status_cb(f"{t('ffmpeg_download_failed_title')}: {exc}")
                 self._ui_queue.put(("error_popup", t("ffmpeg_download_failed_title"), str(exc)))
             self._ui_queue.put(("engine_status",))
-            self.ffmpeg_btn.configure(state="normal")
+            self._ui_queue.put(("ffmpeg_btn_enable",))  # Tk widgets may only be touched from the UI thread
 
         threading.Thread(target=worker, daemon=True).start()
 

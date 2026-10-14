@@ -21,7 +21,9 @@ _DISPATCH = {
 _SUPPORTS_PROGRESS = {Engine.FFMPEG}
 
 
-def convert_file(src: Path, dst: Path, progress_cb: Optional[Callable[[float], None]] = None) -> None:
+def convert_file(src: Path, dst: Path, progress_cb: Optional[Callable[[float], None]] = None) -> list[Path]:
+    """Convert src to dst and return every file produced. That is [dst]
+    except when a converter writes extra files next to it (PDF pages)."""
     src_ext = src.suffix.lstrip(".")
     dst_ext = dst.suffix.lstrip(".")
     engine = engine_for(src_ext, dst_ext)
@@ -31,6 +33,7 @@ def convert_file(src: Path, dst: Path, progress_cb: Optional[Callable[[float], N
     fn = _DISPATCH[engine]
     dst.parent.mkdir(parents=True, exist_ok=True)
     if engine in _SUPPORTS_PROGRESS:
-        fn(src, dst, progress_cb=progress_cb)
+        produced = fn(src, dst, progress_cb=progress_cb)
     else:
-        fn(src, dst)
+        produced = fn(src, dst)
+    return list(produced) if produced else [dst]
