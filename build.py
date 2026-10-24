@@ -18,17 +18,22 @@ args = parser.parse_args()
 
 fix_tcl_tk_env()
 
-# Baked into the exe so it defaults to the right language without the end
-# user needing to set an environment variable. See app/i18n.py.
-Path("app/_lang_default.py").write_text(f'DEFAULT_LANG = "{args.lang}"\n', encoding="utf-8")
-
 exe_name = "Triton" if args.lang == "tr" else "Triton-EN"
 env = os.environ.copy()
 env["TRITON_EXE_NAME"] = exe_name
 
-subprocess.run(
-    [sys.executable, "-m", "PyInstaller", "Triton.spec", "--noconfirm"],
-    check=True, env=env,
-)
+# Baked into the exe so it defaults to the right language without the end
+# user needing to set an environment variable. See app/i18n.py. Removed again
+# afterwards: left behind, it would silently switch every dev run to the
+# language of the last build.
+lang_file = Path("app/_lang_default.py")
+lang_file.write_text(f'DEFAULT_LANG = "{args.lang}"\n', encoding="utf-8")
+try:
+    subprocess.run(
+        [sys.executable, "-m", "PyInstaller", "Triton.spec", "--noconfirm"],
+        check=True, env=env,
+    )
+finally:
+    lang_file.unlink(missing_ok=True)
 
 print(f"\nBuilt dist\\{exe_name}.exe ({args.lang})")

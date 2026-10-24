@@ -4,6 +4,7 @@ import queue
 import shutil
 import subprocess
 import threading
+import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox
 
@@ -16,9 +17,17 @@ from app.core.converter_registry import convert_file
 from app.core import ffmpeg_manager, libreoffice_manager
 from app.utils.paths import default_output_dir, staging_dir, assets_dir
 from app.ui import theme
-from app.i18n import t
+from app.ui.textfit import fit_text
+from app.ui.tooltip import Tooltip
+from app.i18n import t, tn
 
 ctk.set_appearance_mode("dark")
+
+# Each row is ~7 canvas-backed widgets and costs 30-50 ms to first paint, and
+# the cost grows with the number of mapped rows. So only a page of rows is ever
+# on screen; the rest live as plain Job objects until the user asks for more.
+PAGE_SIZE = 40
+ROWS_PER_TICK = 2  # rows built per 10 ms tick, so adding files never freezes the window
 
 # --- optional drag & drop -------------------------------------------------
 try:
@@ -43,13 +52,19 @@ class JobRow(ctk.CTkFrame):
         self._on_target_change = on_target_change
         self._on_download = on_download
 
+        self._full_name = job.src.name
+        self._full_path = str(job.src.parent)
+        self._name_shown = self._full_name
+        self._path_shown = self._full_path
+        self._name_w = self._path_w = -1
+
         self.grid_columnconfigure(0, weight=1)
 
-        name_lbl = ctk.CTkLabel(
-            self, text=job.src.name, anchor="w",
+        self.name_lbl = ctk.CTkLabel(
+            self, text=self._full_name, anchor="w",
             text_color=theme.TEXT, font=(theme.FONT_FAMILY, 13, "bold"),
         )
-        name_lbl.grid(row=0, column=0, sticky="ew", padx=(14, 8), pady=(10, 0))
+        self.name_lbl.grid(row=0, column=0, sticky="ew", padx=(14, 8), pady=(10, 0))
 
         badge = ctk.CTkLabel(
             self, text=job.src_ext.upper(), text_color=theme.ACCENT,
@@ -87,16 +102,45 @@ class JobRow(ctk.CTkFrame):
         )
         remove_btn.grid(row=0, column=5, padx=(0, 10), pady=(10, 0))
 
-        path_lbl = ctk.CTkLabel(
-            self, text=str(job.src.parent), anchor="w",
+        self.path_lbl = ctk.CTkLabel(
+            self, text=self._full_path, anchor="w",
             text_color=theme.TEXT_MUTED, font=(theme.FONT_FAMILY, 10),
         )
-        path_lbl.grid(row=1, column=0, columnspan=6, sticky="ew", padx=(14, 10), pady=(0, 10))
+        self.path_lbl.grid(row=1, column=0, columnspan=6, sticky="ew", padx=(14, 10), pady=(0, 10))
 
         self.progress_bar = ctk.CTkProgressBar(
             self, height=6, progress_color=theme.ACCENT, fg_color=theme.BG_PANEL,
         )
         self.progress_bar.set(0)
+
+        self.name_lbl.bind("<Configure>", lambda _e: self._refit_name())
+        self.path_lbl.bind("<Configure>", lambda _e: self._refit_path())
+        Tooltip(self.name_lbl, lambda: self._full_name if self._name_shown != self._full_name else "")
+        Tooltip(self.path_lbl, lambda: self._full_path if self._path_shown != self._full_path else "")
+        Tooltip(remove_btn, lambda: t("tooltip_remove"))
+
+        # a row built late (paged in mid-conversion) must show the job's real state
+        self.set_status(job.status, job.error)
+
+    def _refit_name(self) -> None:
+        w = self.name_lbl.winfo_width()
+        if w == self._name_w:
+            return
+        self._name_w = w
+        shown = fit_text(self.name_lbl, self._full_name, w - 8, head_ratio=0.65, min_tail=len(self.job.src.suffix) + 3)
+        if shown != self._name_shown:
+            self._name_shown = shown
+            self.name_lbl.configure(text=shown)
+
+    def _refit_path(self) -> None:
+        w = self.path_lbl.winfo_width()
+        if w == self._path_w:
+            return
+        self._path_w = w
+        shown = fit_text(self.path_lbl, self._full_path, w - 8, head_ratio=0.3)
+        if shown != self._path_shown:
+            self._path_shown = shown
+            self.path_lbl.configure(text=shown)
 
     def _target_changed(self, value: str) -> None:
         self.job.target_ext = value
@@ -150,7 +194,14 @@ class App(_BaseWindow):
         self.minsize(820, 560)
         self.configure(fg_color=theme.BG)
 
-        self.rows: list[JobRow] = []
+        self.jobs: list[Job] = []                  # every file the user added
+        self.rows: list[JobRow] = []               # widgets for jobs[:len(rows)]
+        self._row_by_job: dict[int, JobRow] = {}
+        self._paths: set[str] = set()
+        self._visible_limit = PAGE_SIZE
+        self._materialize_job = None
+        self._skipped_note = ""
+
         self.out_dir = default_output_dir()
         self._ui_queue: queue.Queue = queue.Queue()
         self._converting = False
@@ -161,6 +212,8 @@ class App(_BaseWindow):
 
         if DND_AVAILABLE:
             self.drop_target_register(DND_FILES)
+            self.dnd_bind("<<DropEnter>>", self._on_drop_enter)
+            self.dnd_bind("<<DropLeave>>", self._on_drop_leave)
             self.dnd_bind("<<Drop>>", self._on_drop)
 
     # ------------------------------------------------------------------ UI
@@ -233,44 +286,79 @@ class App(_BaseWindow):
         )
         self.drop_hint.pack(side="right")
 
-        self.scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
-        self.scroll.pack(fill="both", expand=True, padx=12, pady=6)
+        # The border is the drag-over affordance: transparent until a drag enters.
+        self.drop_zone = ctk.CTkFrame(
+            tab, fg_color="transparent", border_width=2, border_color=theme.BG_PANEL, corner_radius=12,
+        )
+        self.drop_zone.pack(fill="both", expand=True, padx=12, pady=6)
+
+        self.scroll = ctk.CTkScrollableFrame(self.drop_zone, fg_color="transparent")
+        self.scroll.pack(fill="both", expand=True, padx=2, pady=2)
         self.scroll.grid_columnconfigure(0, weight=1)
 
-        self.empty_lbl = ctk.CTkLabel(
-            self.scroll, text=t("empty_list"), text_color=theme.TEXT_MUTED,
+        self.empty_frame = self._build_empty_state(self.scroll)
+        self.empty_frame.grid(row=0, column=0, pady=30)
+
+        self.more_btn = ctk.CTkButton(
+            self.scroll, text="", command=self._show_more,
+            fg_color=theme.BG_ROW, hover_color=theme.BG_ROW_HOVER, height=34,
         )
-        self.empty_lbl.grid(row=0, column=0, pady=40)
+
+        # status line (own row, so it can never be squeezed by the controls)
+        self.summary_lbl = ctk.CTkLabel(tab, text="", text_color=theme.TEXT_MUTED, anchor="w")
+        self.summary_lbl.pack(fill="x", padx=16, pady=(2, 0))
 
         bottom = ctk.CTkFrame(tab, fg_color="transparent")
-        bottom.pack(fill="x", padx=12, pady=(6, 14))
+        bottom.pack(fill="x", padx=12, pady=(4, 14))
+        bottom.grid_columnconfigure(1, weight=1)  # the folder path flexes; the buttons never shrink
 
-        ctk.CTkLabel(bottom, text=t("default_download_folder"), text_color=theme.TEXT_MUTED).pack(side="left")
+        ctk.CTkLabel(bottom, text=t("default_download_folder"), text_color=theme.TEXT_MUTED).grid(
+            row=0, column=0, sticky="w")
         self.out_dir_lbl = ctk.CTkLabel(
-            bottom, text=str(self.out_dir), text_color=theme.TEXT,
+            bottom, text=str(self.out_dir), text_color=theme.TEXT, anchor="w",
             font=(theme.FONT_FAMILY, 11),
         )
-        self.out_dir_lbl.pack(side="left", padx=(6, 10))
+        self.out_dir_lbl.grid(row=0, column=1, sticky="ew", padx=(6, 8))
         ctk.CTkButton(
             bottom, text=t("browse"), width=70, command=self._choose_out_dir,
             fg_color=theme.BG_ROW, hover_color=theme.BG_ROW_HOVER,
-        ).pack(side="left")
+        ).grid(row=0, column=2, padx=(0, 18))
+
+        self.download_all_btn = ctk.CTkButton(
+            bottom, text=t("download_all"), command=self._download_all,
+            fg_color=theme.BG_ROW, hover_color=theme.BG_ROW_HOVER, width=130, height=36,
+        )
+        self.download_all_btn.grid(row=0, column=3, padx=(0, 10))
 
         self.convert_btn = ctk.CTkButton(
             bottom, text=t("convert"), command=self._start_conversion,
             fg_color=theme.ACCENT, hover_color=theme.ACCENT_HOVER, width=140, height=36,
             font=(theme.FONT_FAMILY, 14, "bold"),
         )
-        self.convert_btn.pack(side="right")
+        self.convert_btn.grid(row=0, column=4)
 
-        self.download_all_btn = ctk.CTkButton(
-            bottom, text=t("download_all"), command=self._download_all,
-            fg_color=theme.BG_ROW, hover_color=theme.BG_ROW_HOVER, width=130, height=36,
-        )
-        self.download_all_btn.pack(side="right", padx=(0, 10))
+        self._out_dir_w = -1
+        self.out_dir_lbl.bind("<Configure>", lambda _e: self._refit_out_dir())
+        Tooltip(self.out_dir_lbl, lambda: str(self.out_dir))
 
-        self.summary_lbl = ctk.CTkLabel(bottom, text="", text_color=theme.TEXT_MUTED)
-        self.summary_lbl.pack(side="right", padx=12)
+        self._update_summary()
+
+    def _build_empty_state(self, parent) -> ctk.CTkFrame:
+        card = ctk.CTkFrame(parent, fg_color=theme.BG_ROW, corner_radius=16)
+        ctk.CTkLabel(
+            card, text="⬇", text_color=theme.ACCENT, font=(theme.FONT_FAMILY, 34),
+        ).pack(padx=70, pady=(26, 4))
+        ctk.CTkLabel(
+            card, text=t("empty_title"), text_color=theme.TEXT, font=(theme.FONT_FAMILY, 16, "bold"),
+        ).pack()
+        ctk.CTkLabel(
+            card, text=t("empty_hint"), text_color=theme.TEXT_MUTED, font=(theme.FONT_FAMILY, 12),
+        ).pack(pady=(2, 10))
+        ctk.CTkLabel(
+            card, text=t("empty_formats"), text_color=theme.ACCENT, fg_color=theme.ACCENT_SOFT,
+            corner_radius=8, font=(theme.FONT_FAMILY, 11, "bold"), padx=12, pady=3,
+        ).pack(pady=(0, 26))
+        return card
 
     def _build_engine_card(self, parent, title: str, subtitle: str, button_command) -> tuple:
         card = ctk.CTkFrame(parent, fg_color=theme.BG_ROW, corner_radius=12)
@@ -325,44 +413,107 @@ class App(_BaseWindow):
 
         self._refresh_engine_status()
 
-    # --------------------------------------------------------------- files
+    # ---------------------------------------------------------------- list
     def _add_paths(self, paths: list[str]) -> None:
-        added = False
+        # A dropped/selected folder contributes its files (one level deep).
+        candidates: list[Path] = []
         for p in paths:
-            path = Path(p)
-            if not path.is_file():
+            pp = Path(p)
+            if pp.is_dir():
+                try:
+                    candidates.extend(sorted(x for x in pp.iterdir() if x.is_file()))
+                except OSError:
+                    pass
+            else:
+                candidates.append(pp)
+
+        added = skipped = 0
+        for path in candidates:
+            key = str(path)
+            targets = formats.targets_for(path.suffix.lower().lstrip(".")) if path.is_file() else []
+            if not targets or key in self._paths:
+                skipped += 1
                 continue
-            ext = path.suffix.lower().lstrip(".")
-            targets = formats.targets_for(ext)
-            if not targets:
-                continue
-            job = Job(src=path, target_ext=targets[0])
+            self.jobs.append(Job(src=path, target_ext=targets[0]))
+            self._paths.add(key)
+            added += 1
+
+        self._skipped_note = t("skipped_files", count=skipped) if skipped else ""
+        if added:
+            self._materialize_next()
+        self._sync_empty_state()
+        self._update_summary()
+
+    def _materialize_next(self) -> None:
+        """Build a couple of rows, then yield to the event loop. Keeps the
+        window responsive and gives the list a short cascade as it fills."""
+        self._materialize_job = None
+        made = 0
+        target = min(len(self.jobs), self._visible_limit)
+        while len(self.rows) < target and made < ROWS_PER_TICK:
+            job = self.jobs[len(self.rows)]
             row = JobRow(self.scroll, job, self._remove_row, self._update_summary, self._download_one)
             self.rows.append(row)
-            added = True
+            self._row_by_job[id(job)] = row
+            row.grid(row=len(self.rows) - 1, column=0, sticky="ew", pady=4, padx=2)
+            made += 1
+        self._sync_empty_state()
+        self._place_more_button()
+        if len(self.rows) < target:
+            self._materialize_job = self.after(10, self._materialize_next)
 
-        if added:
-            self.empty_lbl.grid_forget()
-            self._relayout_rows()
-            self._update_summary()
+    def _place_more_button(self) -> None:
+        hidden = len(self.jobs) - len(self.rows)
+        if hidden > 0 and len(self.rows) >= self._visible_limit:
+            self.more_btn.configure(text=t("show_more", step=min(PAGE_SIZE, hidden), hidden=hidden))
+            self.more_btn.grid(row=len(self.rows), column=0, sticky="ew", pady=(6, 4), padx=2)
+        else:
+            self.more_btn.grid_forget()
+
+    def _show_more(self) -> None:
+        self._visible_limit += PAGE_SIZE
+        self._materialize_next()
+
+    def _sync_empty_state(self) -> None:
+        if self.jobs:
+            self.empty_frame.grid_forget()
+        else:
+            self.empty_frame.grid(row=0, column=0, pady=30)
+            # the list may have been scrolled down; without this the card sits above the viewport
+            self.scroll._parent_canvas.yview_moveto(0)
 
     def _relayout_rows(self) -> None:
         for i, row in enumerate(self.rows):
             row.grid(row=i, column=0, sticky="ew", pady=4, padx=2)
 
     def _remove_row(self, row: JobRow) -> None:
+        job = row.job
+        job.removed = True
+        self._row_by_job.pop(id(job), None)
+        self._paths.discard(str(job.src))
         row.destroy()
         self.rows.remove(row)
-        if not self.rows:
-            self.empty_lbl.grid(row=0, column=0, pady=40)
+        self.jobs.remove(job)
         self._relayout_rows()
+        self._materialize_next()  # a hidden job may now fit
         self._update_summary()
 
     def _clear_all(self) -> None:
+        if self._materialize_job is not None:
+            self.after_cancel(self._materialize_job)
+            self._materialize_job = None
+        for job in self.jobs:
+            job.removed = True
         for row in self.rows:
             row.destroy()
         self.rows.clear()
-        self.empty_lbl.grid(row=0, column=0, pady=40)
+        self.jobs.clear()
+        self._row_by_job.clear()
+        self._paths.clear()
+        self._visible_limit = PAGE_SIZE
+        self._skipped_note = ""
+        self._place_more_button()
+        self._sync_empty_state()
         self._update_summary()
 
     def _add_files(self) -> None:
@@ -375,21 +526,43 @@ class App(_BaseWindow):
 
     def _add_folder(self) -> None:
         folder = filedialog.askdirectory(title=t("dialog_select_folder"))
-        if not folder:
-            return
-        exts = set(formats.all_extensions())
-        found = [str(p) for p in Path(folder).iterdir() if p.is_file() and p.suffix.lower().lstrip(".") in exts]
-        self._add_paths(found)
+        if folder:
+            self._add_paths([folder])
 
-    def _on_drop(self, event) -> None:
-        raw = self.tk.splitlist(event.data)
-        self._add_paths(list(raw))
+    # ------------------------------------------------------------ drag & drop
+    def _set_drop_highlight(self, on: bool) -> None:
+        self.drop_zone.configure(border_color=theme.ACCENT if on else theme.BG_PANEL)
+
+    def _on_drop_enter(self, event):
+        self._set_drop_highlight(True)
+        return event.action
+
+    def _on_drop_leave(self, event):
+        self._set_drop_highlight(False)
+        return event.action
+
+    def _on_drop(self, event):
+        self._set_drop_highlight(False)
+        self._add_paths(list(self.tk.splitlist(event.data)))
+        return event.action
+
+    # ---------------------------------------------------------- output folder
+    def _refit_out_dir(self) -> None:
+        w = self.out_dir_lbl.winfo_width()
+        if w == self._out_dir_w:
+            return
+        self._out_dir_w = w
+        self.out_dir_lbl.configure(text=fit_text(self.out_dir_lbl, str(self.out_dir), w - 8, head_ratio=0.3))
+
+    def _set_out_dir(self, folder: Path) -> None:
+        self.out_dir = folder
+        self._out_dir_w = -1
+        self._refit_out_dir()
 
     def _choose_out_dir(self) -> None:
         folder = filedialog.askdirectory(title=t("dialog_select_default_folder"), initialdir=str(self.out_dir))
         if folder:
-            self.out_dir = Path(folder)
-            self.out_dir_lbl.configure(text=str(self.out_dir))
+            self._set_out_dir(Path(folder))
 
     def _reveal_in_explorer(self, path: Path) -> None:
         try:
@@ -413,12 +586,11 @@ class App(_BaseWindow):
             return
         dest = Path(path)
         shutil.copy2(job.dst, dest)
-        self.out_dir = dest.parent
-        self.out_dir_lbl.configure(text=str(self.out_dir))
+        self._set_out_dir(dest.parent)
         self._reveal_in_explorer(dest)
 
     def _download_all(self) -> None:
-        completed = [row.job for row in self.rows if row.job.status == STATUS_DONE and row.job.dst and row.job.dst.exists()]
+        completed = [j for j in self.jobs if j.status == STATUS_DONE and j.dst and j.dst.exists()]
         if not completed:
             messagebox.showinfo(t("app_title"), t("no_files_to_download"))
             return
@@ -431,18 +603,20 @@ class App(_BaseWindow):
         for job in completed:
             shutil.copy2(job.dst, dest_dir / job.dst.name)
 
-        self.out_dir = dest_dir
-        self.out_dir_lbl.configure(text=str(self.out_dir))
+        self._set_out_dir(dest_dir)
         self._reveal_in_explorer(dest_dir)
 
     def _update_summary(self) -> None:
-        self.summary_lbl.configure(text=t("file_count", count=len(self.rows)))
+        text = tn("file_count", len(self.jobs))
+        if self._skipped_note:
+            text += f"  ·  {self._skipped_note}"
+        self.summary_lbl.configure(text=text)
 
     # ---------------------------------------------------------- conversion
     def _start_conversion(self) -> None:
         if self._converting:
             return
-        if not self.rows:
+        if not self.jobs:
             messagebox.showinfo(t("app_title"), t("add_files_first"))
             return
 
@@ -456,40 +630,46 @@ class App(_BaseWindow):
         self._converting = True
         self.convert_btn.configure(state="disabled", text=t("converting_btn"))
 
-        jobs = [row.job for row in self.rows]
-        rows_by_job = {id(row.job): row for row in self.rows}
+        jobs = list(self.jobs)
         stage_dir = staging_dir()
 
         def worker():
             done, failed = 0, 0
+            seen: dict[str, int] = {}  # two "a.png" from different folders must not share one output file
             for job in jobs:
-                self._ui_queue.put(("status", id(job), STATUS_CONVERTING, None))
+                if job.removed:
+                    continue
+                self._ui_queue.put(("status", job, STATUS_CONVERTING, None))
                 try:
                     dst = job.output_path(stage_dir)
+                    key = dst.name.lower()
+                    n = seen.get(key, 0)
+                    seen[key] = n + 1
+                    if n:
+                        dst = dst.with_stem(f"{dst.stem} ({n + 1})")
                     if dst.exists():
                         dst.unlink()
 
                     def progress_cb(fraction: float, _job=job) -> None:
-                        self._ui_queue.put(("progress", id(_job), fraction))
+                        self._ui_queue.put(("progress", _job, fraction))
 
                     convert_file(job.src, dst, progress_cb=progress_cb)
                     job.dst = dst
-                    self._ui_queue.put(("status", id(job), STATUS_DONE, None))
+                    self._ui_queue.put(("status", job, STATUS_DONE, None))
                     done += 1
                 except Exception as exc:  # noqa: BLE001
-                    self._ui_queue.put(("status", id(job), STATUS_ERROR, str(exc)))
+                    self._ui_queue.put(("status", job, STATUS_ERROR, str(exc)))
                     failed += 1
             self._ui_queue.put(("finished", None, done, failed))
 
-        self._rows_by_job = rows_by_job
         threading.Thread(target=worker, daemon=True).start()
 
     def _missing_engines(self) -> list[str]:
-        need_ffmpeg = any(row.job.target_ext in formats.VIDEO_EXTS + formats.AUDIO_EXTS for row in self.rows)
+        need_ffmpeg = any(j.target_ext in formats.VIDEO_EXTS + formats.AUDIO_EXTS for j in self.jobs)
         need_office = any(
-            formats.category_of(row.job.target_ext) == formats.Category.DOCUMENT and row.job.target_ext != "pdf"
-            or (formats.category_of(row.job.src_ext) == formats.Category.DOCUMENT and row.job.src_ext not in ("pdf", "jpg", "jpeg", "png"))
-            for row in self.rows
+            formats.category_of(j.target_ext) == formats.Category.DOCUMENT and j.target_ext != "pdf"
+            or (formats.category_of(j.src_ext) == formats.Category.DOCUMENT and j.src_ext not in ("pdf", "jpg", "jpeg", "png"))
+            for j in self.jobs
         )
         missing = []
         if need_ffmpeg and not ffmpeg_manager.is_ready():
@@ -498,40 +678,55 @@ class App(_BaseWindow):
             missing.append("LibreOffice")
         return missing
 
+    def _live_row(self, job: Job) -> JobRow | None:
+        row = self._row_by_job.get(id(job))
+        return row if row is not None and row.winfo_exists() else None
+
     def _poll_ui_queue(self) -> None:
+        # try/finally: one bad message must never stop the poll loop, or every
+        # status/progress update for the rest of the session is lost.
         try:
             while True:
-                item = self._ui_queue.get_nowait()
-                kind = item[0]
-                if kind == "status":
-                    _, job_id, status, error = item
-                    row = self._rows_by_job.get(job_id)
-                    if row:
-                        row.set_status(status, error)
-                elif kind == "progress":
-                    _, job_id, fraction = item
-                    row = self._rows_by_job.get(job_id)
-                    if row:
-                        row.set_progress(fraction)
-                elif kind == "finished":
-                    _, _, done, failed = item
-                    self._converting = False
-                    self.convert_btn.configure(state="normal", text=t("convert"))
-                    self.summary_lbl.configure(text=t("summary_result", done=done, failed=failed))
-                elif kind == "engine_status":
-                    self._refresh_engine_status()
-                elif kind == "text_status":
-                    _, target, text = item
-                    if target == "ffmpeg":
-                        self.ffmpeg_status_lbl.configure(text=text)
-                    else:
-                        self.lo_status_lbl.configure(text=text)
-                elif kind == "error_popup":
-                    _, title, text = item
-                    messagebox.showerror(title, text)
-        except queue.Empty:
-            pass
-        self.after(120, self._poll_ui_queue)
+                try:
+                    item = self._ui_queue.get_nowait()
+                except queue.Empty:
+                    break
+                try:
+                    self._handle_ui_item(item)
+                except tk.TclError:
+                    pass  # the row was removed while a message for it was in flight
+        finally:
+            self.after(120, self._poll_ui_queue)
+
+    def _handle_ui_item(self, item) -> None:
+        kind = item[0]
+        if kind == "status":
+            _, job, status, error = item
+            job.status, job.error = status, error  # the model is the source of truth, even with no row on screen
+            row = self._live_row(job)
+            if row:
+                row.set_status(status, error)
+        elif kind == "progress":
+            _, job, fraction = item
+            row = self._live_row(job)
+            if row:
+                row.set_progress(fraction)
+        elif kind == "finished":
+            _, _, done, failed = item
+            self._converting = False
+            self.convert_btn.configure(state="normal", text=t("convert"))
+            self.summary_lbl.configure(text=t("summary_result", done=done, failed=failed))
+        elif kind == "engine_status":
+            self._refresh_engine_status()
+        elif kind == "text_status":
+            _, target, text = item
+            if target == "ffmpeg":
+                self.ffmpeg_status_lbl.configure(text=text)
+            else:
+                self.lo_status_lbl.configure(text=text)
+        elif kind == "error_popup":
+            _, title, text = item
+            messagebox.showerror(title, text)
 
     # ------------------------------------------------------------- engines
     def _refresh_engine_status(self) -> None:

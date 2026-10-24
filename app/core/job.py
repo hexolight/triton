@@ -16,6 +16,7 @@ class Job:
     status: str = STATUS_PENDING
     error: Optional[str] = None
     dst: Optional[Path] = None
+    removed: bool = False  # set when the user drops it from the list; the worker skips it
 
     @property
     def src_ext(self) -> str:

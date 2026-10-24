@@ -29,7 +29,12 @@ _TR: dict[str, str] = {
     "btn_add_folder": "+ Klasör Ekle",
     "btn_clear_list": "Listeyi Temizle",
     "drop_hint": "dosyaları buraya sürükleyip bırakabilirsin",
-    "empty_list": "Henüz dosya eklenmedi.",
+    "empty_title": "Dosyaları buraya bırak",
+    "empty_hint": "veya yukarıdan dosya ya da klasör ekle",
+    "empty_formats": "Video · Ses · Görsel · PDF · Office",
+    "skipped_files": "{count} atlandı (desteklenmiyor ya da zaten ekli)",
+    "show_more": "{step} dosya daha göster ({hidden} gizli)",
+    "tooltip_remove": "Listeden kaldır",
     "default_download_folder": "Varsayılan indirme klasörü:",
     "browse": "Gözat",
     "convert": "Dönüştür",
@@ -67,7 +72,8 @@ _TR: dict[str, str] = {
         "sekmesinden kurabilirsiniz. Bu motoru gerektirmeyen dosyalar yine "
         "de dönüştürülecek.",
     "summary_result": "{done} tamamlandı, {failed} hata",
-    "file_count": "{count} dosya",
+    "file_count_one": "{count} dosya",
+    "file_count_other": "{count} dosya",
     "output_folder_name": "Triton Çıktıları",
     "ffmpeg_download_failed_title": "FFmpeg indirilemedi",
     "libreoffice_already_ready": "LibreOffice zaten hazır.",
@@ -104,7 +110,12 @@ _EN: dict[str, str] = {
     "btn_add_folder": "+ Add Folder",
     "btn_clear_list": "Clear List",
     "drop_hint": "you can drag and drop files here",
-    "empty_list": "No files added yet.",
+    "empty_title": "Drop files here",
+    "empty_hint": "or add files or a folder above",
+    "empty_formats": "Video · Audio · Images · PDF · Office",
+    "skipped_files": "{count} skipped (unsupported or already added)",
+    "show_more": "Show {step} more ({hidden} hidden)",
+    "tooltip_remove": "Remove from list",
     "default_download_folder": "Default download folder:",
     "browse": "Browse",
     "convert": "Convert",
@@ -142,7 +153,8 @@ _EN: dict[str, str] = {
         "install them from the Settings tab. Files that don't need them "
         "will still be converted.",
     "summary_result": "{done} done, {failed} failed",
-    "file_count": "{count} file(s)",
+    "file_count_one": "{count} file",
+    "file_count_other": "{count} files",
     "output_folder_name": "Triton Output",
     "ffmpeg_download_failed_title": "FFmpeg download failed",
     "libreoffice_already_ready": "LibreOffice is already ready.",
@@ -173,3 +185,8 @@ _STRINGS = {"tr": _TR, "en": _EN}
 def t(key: str, **kwargs) -> str:
     s = _STRINGS[LANG].get(key) or _TR.get(key, key)
     return s.format(**kwargs) if kwargs else s
+
+
+def tn(key: str, count: int, **kwargs) -> str:
+    """Plural-aware lookup: uses `<key>_one` for exactly 1, else `<key>_other`."""
+    return t(f"{key}_{'one' if count == 1 else 'other'}", count=count, **kwargs)
