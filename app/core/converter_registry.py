@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from app.core.formats import Engine, engine_for
-from app.converters import video_audio, image, pdf, pdf_docx, office
+from app.converters import video_audio, image, pdf, pdf_docx, docs, office
 from app.i18n import t
 
 _DISPATCH = {
@@ -13,6 +13,7 @@ _DISPATCH = {
     Engine.IMAGE: image.convert,
     Engine.PDF_IMAGE: pdf.convert,
     Engine.PDF_DOCX: pdf_docx.convert,
+    Engine.DOCS: docs.convert,
     Engine.OFFICE: office.convert,
 }
 

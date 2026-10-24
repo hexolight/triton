@@ -13,6 +13,10 @@ tmp_ret = collect_all('tkinterdnd2')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('pymupdf')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+# the built-in document engine: these ship template/data files that only matter at runtime
+for pkg in ('pptx', 'docx', 'openpyxl', 'odf', 'mammoth'):
+    tmp_ret = collect_all(pkg)
+    datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(

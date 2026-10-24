@@ -26,12 +26,19 @@ run.bat
 
 ### Dönüştürme motorları
 
-- **Video/ses (FFmpeg):** Uygulama içindeki *Ayarlar* sekmesinden "İndir" ile
-  otomatik iner; sisteme kurulmaz, yalnızca uygulamanın kendi klasörüne iner.
-- **Ofis belgeleri (LibreOffice):** Word/Excel/PowerPoint dönüşümleri gerçek
-  bir LibreOffice kurulumu gerektirir. *Ayarlar* sekmesindeki "Kur" butonu
-  resmi indirme sayfasını tarayıcıda açar; .msi dosyasını siz indirip
-  çalıştırırsınız.
+- **Video/ses (FFmpeg):** Başlıktaki FFmpeg göstergesinden açılan ekranda
+  "İndir" ile otomatik iner; sisteme kurulmaz, yalnızca uygulamanın kendi
+  klasörüne iner.
+- **Belgeler (dahili motor):** docx, xlsx/xls/csv, pptx, odt ve txt dosyalarını
+  PDF'e çevirir (ayrıca xlsx ↔ csv, xls → xlsx, txt ↔ docx). Küçük Python
+  kütüphaneleriyle HTML'e çevirip sistemdeki Edge veya Chrome ile PDF'e basar;
+  **kurulum gerektirmez**. Metin, tablo ve görseller korunur; sayfa düzeni,
+  üst/alt bilgi ve özel yazı tipleri birebir korunmaz (PowerPoint metin kutuları
+  ve görselleri konumlarıyla çıkar, tema renkleri/madde işaretleri yaklaşıktır).
+- **LibreOffice (isteğe bağlı):** Yalnızca eski `.doc`/`.ppt`/`.rtf`/`.odp`/`.ods`
+  dosyaları ve Office biçimleri arası dönüşümler için gerekir; sayfa düzenini en
+  sadık koruyan motordur. Yaklaşık 700 MB yer kaplar, Triton onsuz da çalışır.
+  Kur düğmesi resmi indirme sayfasını tarayıcıda açar.
 - **PDF ↔ görsel, PDF → docx:** Ek kurulum gerekmez (Pillow, PyMuPDF, pdf2docx
   ile Python içinde çalışır).
 
@@ -92,13 +99,19 @@ On first launch it creates a virtual environment and installs dependencies autom
 
 ### Conversion engines
 
-- **Video/audio (FFmpeg):** Downloaded automatically via the "Download"
-  button on the *Settings* tab — into the app's own folder only, never
-  installed system-wide.
-- **Office documents (LibreOffice):** Word/Excel/PowerPoint conversions
-  need a real LibreOffice install. The "Install" button on the *Settings*
-  tab opens the official download page in your browser; you download and
-  run the .msi yourself.
+- **Video/audio (FFmpeg):** Downloaded automatically with the "Download"
+  button on the engines screen (open it from the FFmpeg indicator in the
+  header) — into the app's own folder only, never installed system-wide.
+- **Documents (built-in engine):** Converts docx, xlsx/xls/csv, pptx, odt and
+  txt to PDF (plus xlsx ↔ csv, xls → xlsx, txt ↔ docx). Small Python libraries
+  turn the file into HTML and the Edge or Chrome already on your system prints
+  it to PDF, so **nothing to install**. Text, tables and images are kept; exact
+  page layout, headers/footers and custom fonts are not (PowerPoint text boxes
+  and pictures keep their positions; theme colours and bullets are approximate).
+- **LibreOffice (optional):** Only needed for old `.doc`/`.ppt`/`.rtf`/`.odp`/`.ods`
+  files and conversions between Office formats; it is the engine that keeps
+  page layout most faithfully. Takes about 700 MB, and Triton works without it.
+  The install button opens the official download page in your browser.
 - **PDF ↔ image, PDF → docx:** No extra install needed (runs in pure
   Python via Pillow, PyMuPDF, pdf2docx).
 

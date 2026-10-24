@@ -15,6 +15,7 @@ from app.core import formats
 from app.core.job import Job, STATUS_PENDING, STATUS_CONVERTING, STATUS_DONE, STATUS_ERROR
 from app.core.converter_registry import convert_file
 from app.core import ffmpeg_manager, libreoffice_manager
+from app.converters import docs
 from app.utils.paths import default_output_dir, staging_dir, assets_dir
 from app.ui import theme, icons
 from app.ui.textfit import fit_text
@@ -468,8 +469,11 @@ class App(_BaseWindow):
         self.ffmpeg_status_lbl, self.ffmpeg_btn = self._build_engine_row(
             panel, 0, t("engine_ffmpeg_name"), t("engine_ffmpeg_desc"), self._install_ffmpeg)
         ctk.CTkFrame(panel, height=1, fg_color=theme.INK_LINE).grid(row=1, column=0, sticky="ew")
+        self.docs_status_lbl, _ = self._build_engine_row(
+            panel, 2, t("engine_docs_name"), t("engine_docs_desc"), None)
+        ctk.CTkFrame(panel, height=1, fg_color=theme.INK_LINE).grid(row=3, column=0, sticky="ew")
         self.lo_status_lbl, self.lo_btn = self._build_engine_row(
-            panel, 2, t("engine_libreoffice_name"), t("engine_libreoffice_desc"), self._install_libreoffice)
+            panel, 4, t("engine_libreoffice_name"), t("engine_libreoffice_desc"), self._install_libreoffice)
 
     def _build_engine_row(self, parent, grid_row: int, title: str, desc: str, command) -> tuple:
         row = ctk.CTkFrame(parent, fg_color="transparent")
@@ -487,11 +491,13 @@ class App(_BaseWindow):
             row, text=desc, text_color=theme.TEXT_MUTED, font=(theme.FONT_FAMILY, 12), anchor="w",
             justify="left", wraplength=520,
         ).grid(row=2, column=0, sticky="w", pady=(8, 20), padx=(2, 0))
-        btn = ctk.CTkButton(
-            row, text="", width=150, height=36, corner_radius=10, font=(theme.FONT_STRONG, 13),
-            command=command, **_secondary(),
-        )
-        btn.grid(row=0, column=1, rowspan=3, padx=(24, 2))
+        btn = None
+        if command is not None:  # the built-in engine has nothing to install
+            btn = ctk.CTkButton(
+                row, text="", width=150, height=36, corner_radius=10, font=(theme.FONT_STRONG, 13),
+                command=command, **_secondary(),
+            )
+            btn.grid(row=0, column=1, rowspan=3, padx=(24, 2))
         return status, btn
 
     # ---------------------------------------------------------------- list
@@ -878,22 +884,30 @@ class App(_BaseWindow):
             messagebox.showerror(title, text)
 
     # ------------------------------------------------------------- engines
-    def _set_engine_ui(self, ready: bool, status_lbl, action_btn, chip, ready_text: str, idle_text: str) -> None:
-        colour = theme.EMERALD_TEXT if ready else theme.WARNING
+    def _set_engine_ui(self, ready: bool, status_lbl, action_btn, chip, ready_text: str, idle_text: str,
+                       missing_label: str, missing_colour: str) -> None:
+        colour = theme.EMERALD_TEXT if ready else missing_colour
         status_lbl.configure(
-            text="  " + (t("engine_ready") if ready else t("engine_not_ready")),
+            text="  " + (t("engine_ready") if ready else missing_label),
             text_color=colour, image=icons.dot(colour),
         )
         chip.configure(image=icons.dot(colour))
         action_btn.configure(text=ready_text if ready else idle_text)
 
     def _refresh_engine_status(self) -> None:
+        # FFmpeg is needed for any video/audio job, so absence is a warning.
         self._set_engine_ui(
             ffmpeg_manager.is_ready(), self.ffmpeg_status_lbl, self.ffmpeg_btn, self.chip_ffmpeg,
-            t("engine_recheck"), t("engine_download"))
+            t("engine_recheck"), t("engine_download"), t("engine_not_ready"), theme.WARNING)
+        # LibreOffice is optional: not having it is a normal state, not a problem to flag.
         self._set_engine_ui(
             libreoffice_manager.is_ready(), self.lo_status_lbl, self.lo_btn, self.chip_lo,
-            t("engine_recheck"), t("engine_install"))
+            t("engine_recheck"), t("engine_install"), t("engine_optional_missing"), theme.TEXT_MUTED)
+        has_browser = docs.find_browser() is not None
+        colour = theme.EMERALD_TEXT if has_browser else theme.WARNING
+        self.docs_status_lbl.configure(
+            text="  " + t("engine_docs_status" if has_browser else "engine_docs_status_nobrowser"),
+            text_color=colour, image=icons.dot(colour))
 
     def _install_ffmpeg(self) -> None:
         self.ffmpeg_btn.configure(state="disabled")

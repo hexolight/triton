@@ -11,7 +11,8 @@ class Engine(Enum):
     IMAGE = "image"          # Pillow
     PDF_IMAGE = "pdf_image"  # PyMuPDF <-> Pillow/img2pdf
     PDF_DOCX = "pdf_docx"    # pdf2docx
-    OFFICE = "office"        # LibreOffice headless
+    DOCS = "docs"            # built-in: small libraries + the system browser, nothing to install
+    OFFICE = "office"        # LibreOffice headless, optional, for everything DOCS can't do
 
 
 class Category(Enum):
@@ -46,6 +47,18 @@ for e in DOC_TO_PDF_ONLY:
 FORMATS[PDF_EXT] = Format(PDF_EXT, Category.DOCUMENT, "PDF")
 
 OFFICE_NATIVE_EXTS = set(DOC_TO_PDF_ONLY)  # everything LibreOffice can read/write directly
+
+# Document conversions the built-in engine (converters/docs.py) handles itself.
+# Any other document -> document pair needs the optional LibreOffice.
+NATIVE_DOC_PAIRS = frozenset({
+    ("docx", "pdf"), ("docx", "txt"),
+    ("txt", "pdf"), ("txt", "docx"),
+    ("odt", "pdf"),
+    ("pptx", "pdf"),
+    ("xlsx", "pdf"), ("xlsx", "csv"),
+    ("xls", "pdf"), ("xls", "csv"), ("xls", "xlsx"),
+    ("csv", "pdf"), ("csv", "xlsx"),
+})
 
 
 def category_of(ext: str) -> Category | None:
@@ -114,7 +127,7 @@ def engine_for(src_ext: str, dst_ext: str) -> Engine | None:
         return Engine.PDF_DOCX
 
     if src_cat == Category.DOCUMENT and dst_cat == Category.DOCUMENT:
-        return Engine.OFFICE
+        return Engine.DOCS if (src_ext, dst_ext) in NATIVE_DOC_PAIRS else Engine.OFFICE
 
     return None
 

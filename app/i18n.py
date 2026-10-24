@@ -64,11 +64,19 @@ _TR: dict[str, str] = {
     "engine_ffmpeg_name": "FFmpeg",
     "engine_ffmpeg_desc": "Video ve ses dönüşümleri için. Yalnızca uygulamanın "
         "kendi klasörüne indirilir, sisteme kurulmaz.",
+    "engine_docs_name": "Belge motoru",
+    "engine_docs_desc": "Word, Excel, PowerPoint, ODT ve metin dosyalarını PDF'e "
+        "çevirir; PDF'i Edge veya Chrome ile basar. Metin, tablo ve görseller "
+        "korunur; sayfa düzeni, üst/alt bilgi ve özel yazı tipleri birebir korunmaz.",
+    "engine_docs_status": "Dahili, kurulum gerekmez",
+    "engine_docs_status_nobrowser": "Edge veya Chrome bulunamadı, yalnızca metin tabanlı belgeler",
     "engine_libreoffice_name": "LibreOffice",
-    "engine_libreoffice_desc": "Word, Excel ve PowerPoint belgelerini PDF'e "
-        "çevirmek için. PDF ↔ görsel ve PDF → Word bunsuz da çalışır.",
+    "engine_libreoffice_desc": "İsteğe bağlı. Eski .doc, .ppt, .rtf, .odp, .ods "
+        "biçimleri ve Office biçimleri arası dönüşümler için; sayfa düzenini "
+        "en sadık koruyan motor. Yaklaşık 700 MB yer kaplar.",
     "engine_ready": "Hazır",
     "engine_not_ready": "Kurulu değil",
+    "engine_optional_missing": "Kurulu değil · isteğe bağlı",
     "engine_recheck": "Yeniden kontrol et",
     "engine_download": "İndir",
     "engine_install": "Kur",
@@ -102,8 +110,12 @@ _TR: dict[str, str] = {
     "err_ffmpeg_bad_package": "İndirilen FFmpeg paketinde çalıştırılabilir dosya bulunamadı.",
     "err_unsupported_image_format": "Desteklenmeyen görsel biçimi: {ext}",
     "err_unsupported_pdf_conversion": "Desteklenmeyen PDF dönüşümü: {src} -> {dst}",
-    "err_libreoffice_missing": "LibreOffice kurulu değil. Sağ üstteki LibreOffice "
-        "göstergesine tıklayıp kurun.",
+    "err_libreoffice_missing": "Bu dönüşüm için isteğe bağlı LibreOffice gerekiyor "
+        "(≈700 MB). Sağ üstteki LibreOffice göstergesinden kurabilirsiniz.",
+    "err_no_browser": "PDF oluşturmak için Microsoft Edge veya Google Chrome gerekiyor.",
+    "err_pdf_print": "PDF oluşturulamadı: tarayıcı çıktı üretmedi.",
+    "err_doc_read": "Dosya işlenemedi: {detail}",
+    "docs_rows_hidden": "… ve {count} satır daha (PDF'te gösterilmiyor)",
     "err_libreoffice_failed": "LibreOffice hatası:\n{detail}",
     "err_libreoffice_no_output": "LibreOffice çıktı dosyası oluşturmadı.",
     "err_unsupported_conversion": "{src} -> {dst} dönüşümü desteklenmiyor.",
@@ -153,11 +165,19 @@ _EN: dict[str, str] = {
     "engine_ffmpeg_name": "FFmpeg",
     "engine_ffmpeg_desc": "For video and audio conversions. Downloaded into the "
         "app's own folder only, never installed system-wide.",
+    "engine_docs_name": "Document engine",
+    "engine_docs_desc": "Converts Word, Excel, PowerPoint, ODT and text files to "
+        "PDF, printing through Edge or Chrome. Text, tables and images are kept; "
+        "page layout, headers/footers and custom fonts are not reproduced exactly.",
+    "engine_docs_status": "Built in, nothing to install",
+    "engine_docs_status_nobrowser": "Edge or Chrome not found, text-based documents only",
     "engine_libreoffice_name": "LibreOffice",
-    "engine_libreoffice_desc": "For converting Word, Excel and PowerPoint "
-        "documents to PDF. PDF ↔ image and PDF → Word work without it.",
+    "engine_libreoffice_desc": "Optional. For old .doc, .ppt, .rtf, .odp, .ods files "
+        "and conversions between Office formats; the engine that keeps page "
+        "layout most faithfully. Takes about 700 MB.",
     "engine_ready": "Ready",
     "engine_not_ready": "Not installed",
+    "engine_optional_missing": "Not installed · optional",
     "engine_recheck": "Check again",
     "engine_download": "Download",
     "engine_install": "Install",
@@ -191,8 +211,12 @@ _EN: dict[str, str] = {
     "err_ffmpeg_bad_package": "No executables found inside the downloaded FFmpeg package.",
     "err_unsupported_image_format": "Unsupported image format: {ext}",
     "err_unsupported_pdf_conversion": "Unsupported PDF conversion: {src} -> {dst}",
-    "err_libreoffice_missing": "LibreOffice isn't installed. Click LibreOffice at "
-        "the top right to install it.",
+    "err_libreoffice_missing": "This conversion needs the optional LibreOffice "
+        "(≈700 MB). You can install it from the LibreOffice indicator at the top right.",
+    "err_no_browser": "Microsoft Edge or Google Chrome is required to create PDFs.",
+    "err_pdf_print": "Couldn't create the PDF: the browser produced no output.",
+    "err_doc_read": "Couldn't process the file: {detail}",
+    "docs_rows_hidden": "… and {count} more rows (not shown in the PDF)",
     "err_libreoffice_failed": "LibreOffice error:\n{detail}",
     "err_libreoffice_no_output": "LibreOffice did not produce an output file.",
     "err_unsupported_conversion": "{src} -> {dst} conversion is not supported.",
