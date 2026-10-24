@@ -345,9 +345,10 @@ class App(_BaseWindow):
 
     def _build_empty_state(self, parent) -> ctk.CTkFrame:
         card = ctk.CTkFrame(parent, fg_color=theme.BG_ROW, corner_radius=16)
-        ctk.CTkLabel(
-            card, text="⬇", text_color=theme.ACCENT, font=(theme.FONT_FAMILY, 34),
-        ).pack(padx=70, pady=(26, 4))
+        icon_path = assets_dir() / "drop_icon.png"
+        if icon_path.exists():
+            self._drop_icon = ctk.CTkImage(light_image=Image.open(icon_path), size=(64, 64))
+            ctk.CTkLabel(card, image=self._drop_icon, text="").pack(padx=70, pady=(24, 6))
         ctk.CTkLabel(
             card, text=t("empty_title"), text_color=theme.TEXT, font=(theme.FONT_FAMILY, 16, "bold"),
         ).pack()
@@ -357,7 +358,7 @@ class App(_BaseWindow):
         ctk.CTkLabel(
             card, text=t("empty_formats"), text_color=theme.ACCENT, fg_color=theme.ACCENT_SOFT,
             corner_radius=8, font=(theme.FONT_FAMILY, 11, "bold"), padx=12, pady=3,
-        ).pack(pady=(0, 26))
+        ).pack(padx=22, pady=(0, 26))
         return card
 
     def _build_engine_card(self, parent, title: str, subtitle: str, button_command) -> tuple:
