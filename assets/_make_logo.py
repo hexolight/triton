@@ -2,7 +2,23 @@
 in-app display, and build a multi-size .ico. Not part of the shipped app."""
 
 from pathlib import Path
+
+import numpy as np
 from PIL import Image, ImageDraw
+
+# The source is a two-colour mark (green field, white bolt). Recolour it into
+# the app palette (emerald ink / champagne) by interpolating between the two.
+SRC_FIELD_R, SRC_BOLT_R = 62, 255
+EMERALD = np.array((31, 143, 107), dtype=float)
+CHAMPAGNE = np.array((238, 221, 174), dtype=float)
+
+
+def recolor(img: Image.Image) -> Image.Image:
+    a = np.asarray(img.convert("RGBA")).astype(float)
+    t = np.clip((a[..., 0] - SRC_FIELD_R) / (SRC_BOLT_R - SRC_FIELD_R), 0, 1)[..., None]
+    rgb = EMERALD * (1 - t) + CHAMPAGNE * t
+    return Image.fromarray(np.concatenate([rgb, a[..., 3:4]], axis=-1).astype("uint8"), "RGBA")
+
 
 SRC = Path(__file__).parent / "logo_source.png"
 OUT_SQUARE = Path(__file__).parent / "logo_square.png"
@@ -19,6 +35,7 @@ bg = im.getpixel((2, 2))
 side = max(w, h)
 square = Image.new("RGBA", (side, side), bg)
 square.paste(im, ((side - w) // 2, (side - h) // 2))
+square = recolor(square)
 square.save(OUT_SQUARE)
 print("square saved", square.size)
 

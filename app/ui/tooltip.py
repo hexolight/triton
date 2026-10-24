@@ -70,9 +70,9 @@ class Tooltip:
             top.overrideredirect(True)
             top.attributes("-topmost", True)
             tk.Label(
-                top, text=text, bg=theme.BG_ROW, fg=theme.TEXT, justify="left", wraplength=520,
+                top, text=text, bg=theme.INK_HOVER, fg=theme.TEXT, justify="left", wraplength=520,
                 font=(theme.FONT_FAMILY, 10), padx=9, pady=5, bd=0,
-                highlightthickness=1, highlightbackground=theme.ACCENT_SOFT,
+                highlightthickness=1, highlightbackground=theme.INK_LINE,
             ).pack()
             top.update_idletasks()
             px, py = self._widget.winfo_pointerxy()
