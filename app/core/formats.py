@@ -10,7 +10,7 @@ class Engine(Enum):
     FFMPEG = "ffmpeg"
     IMAGE = "image"          # Pillow
     PDF_IMAGE = "pdf_image"  # PyMuPDF <-> Pillow/img2pdf
-    PDF_DOCX = "pdf_docx"    # pdf2docx
+    PDF_DOCX = "pdf_docx"    # PyMuPDF + python-docx
     DOCS = "docs"            # built-in: small libraries + the system browser, nothing to install
     OFFICE = "office"        # LibreOffice headless, optional, for everything DOCS can't do
 

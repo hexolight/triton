@@ -28,10 +28,16 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    # nothing in the app uses these; keeping them out stops a stray dev-environment install from bloating the exe
+    excludes=['numpy', 'cv2', 'fontTools', 'matplotlib', 'pandas', 'scipy', 'IPython', 'pytest', 'pydoc_data'],
     noarchive=False,
     optimize=0,
 )
+# dead weight collect_all() drags in: PyMuPDF's C headers/import libs (build-time only) and Pillow's AVIF codec
+# (Triton converts jpg/png/webp/bmp/gif/tiff/ico; Pillow skips the AVIF plugin cleanly when the module is absent)
+_unused = ('mupdf-devel', '_avif')
+a.binaries = [b for b in a.binaries if not any(u in b[0] for u in _unused)]
+a.datas = [d for d in a.datas if not any(u in d[0] for u in _unused)]
 pyz = PYZ(a.pure)
 
 exe = EXE(

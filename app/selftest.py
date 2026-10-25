@@ -92,11 +92,14 @@ def run(folder: str) -> int:
         except Exception:  # noqa: BLE001
             record(f"{src_name} -> {ext}", False, traceback.format_exc().splitlines()[-1])
 
-    # engines that live in other bundled libraries (opencv/numpy via pdf2docx, PyMuPDF rendering)
+    # PyMuPDF engines: PDF rendering and the PDF -> Word reader/writer
     try:
         pdf = work / "rapor_docx.pdf"
         convert_file(pdf, work / "rapor_pdf.docx")
-        record("pdf -> docx (pdf2docx)", (work / "rapor_pdf.docx").stat().st_size > 0)
+        from docx import Document
+
+        back = " ".join(p.text for p in Document(str(work / "rapor_pdf.docx")).paragraphs)
+        record("pdf -> docx (PyMuPDF + python-docx)", "Çalışkan" in back, "" if "Çalışkan" in back else "text lost")
         convert_file(pdf, work / "rapor_pdf.png")
         record("pdf -> png (PyMuPDF)", (work / "rapor_pdf.png").stat().st_size > 0)
     except Exception:  # noqa: BLE001

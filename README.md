@@ -46,7 +46,7 @@ run.bat
   dosyaları ve Office biçimleri arası dönüşümler için gerekir; sayfa düzenini en
   sadık koruyan motordur. Yaklaşık 700 MB yer kaplar, Triton onsuz da çalışır.
   Kur düğmesi resmi indirme sayfasını tarayıcıda açar.
-- **PDF ↔ görsel, PDF → docx:** Ek kurulum gerekmez (Pillow, PyMuPDF, pdf2docx
+- **PDF ↔ görsel, PDF → docx:** Ek kurulum gerekmez (Pillow, PyMuPDF, python-docx
   ile Python içinde çalışır).
 
 ### Geliştirme
@@ -127,7 +127,7 @@ On first launch it creates a virtual environment and installs dependencies autom
   page layout most faithfully. Takes about 700 MB, and Triton works without it.
   The install button opens the official download page in your browser.
 - **PDF ↔ image, PDF → docx:** No extra install needed (runs in pure
-  Python via Pillow, PyMuPDF, pdf2docx).
+  Python via Pillow, PyMuPDF, python-docx).
 
 ### Development
 
