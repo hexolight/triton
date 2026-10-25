@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Triton · dosya dönüştürücü</title>
+    <meta
+      name="description"
+      content="Video, ses, görsel, PDF ve belgeleri tarayıcıda dönüştürün. Dosyalarınız cihazınızdan çıkmaz."
+    />
+    <meta name="theme-color" content="#08130F" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="canonical" href="https://triton-app.vercel.app/" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Triton" />
+    <meta property="og:title" content="Triton · dosya dönüştürücü / file converter" />
+    <meta
+      property="og:description"
+      content="Video, ses, görsel, PDF ve belgeler. Tarayıcıda çalışır, dosyalarınız cihazınızdan çıkmaz."
+    />
+    <meta property="og:image" content="https://triton-app.vercel.app/og.png" />
+    <meta property="og:url" content="https://triton-app.vercel.app/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="top">
+        <a class="brand" href="/" aria-label="Triton">
+          <img class="logo" src="/logo.png" width="38" height="38" alt="" />
+          <span>
+            <span class="wordmark">Triton</span>
+            <span class="tagline" data-i18n="app_tagline"></span>
+          </span>
+        </a>
+        <nav class="chips">
+          <button class="chip" id="chip-ffmpeg" type="button">
+            <span class="dot" data-state="idle"></span>FFmpeg
+          </button>
+          <button class="chip" id="chip-docs" type="button">
+            <span class="dot" data-state="ready"></span><span data-i18n="chip_docs"></span>
+          </button>
+          <div class="lang" role="group" data-i18n-label="lang_label">
+            <button type="button" data-lang="tr" aria-pressed="false">TR</button>
+            <button type="button" data-lang="en" aria-pressed="false">EN</button>
+          </div>
+        </nav>
+      </header>
+
+      <main class="body">
+        <section class="view" id="main-view">
+          <div class="toolbar">
+            <button class="btn btn-primary" id="btn-add-files" type="button" data-i18n="btn_add_files"></button>
+            <button class="btn" id="btn-add-folder" type="button" data-i18n="btn_add_folder"></button>
+            <button class="btn btn-ghost" id="btn-clear" type="button" data-i18n="btn_clear_list" hidden></button>
+          </div>
+
+          <div class="list-header" id="list-header" hidden>
+            <p class="summary" id="summary" aria-live="polite"></p>
+            <label class="bulk">
+              <span data-i18n="bulk_label"></span>
+              <select id="bulk"></select>
+            </label>
+          </div>
+
+          <div class="dropzone" id="dropzone">
+            <ul class="rows" id="rows"></ul>
+            <div class="empty" id="empty"></div>
+          </div>
+
+          <footer class="foot">
+            <p class="save-note" data-i18n="save_note"></p>
+            <div class="actions">
+              <button class="btn btn-lg" id="btn-save-ready" type="button" hidden></button>
+              <button class="btn btn-lg btn-primary" id="btn-primary" type="button"></button>
+            </div>
+          </footer>
+        </section>
+
+        <section class="view" id="engines-view" hidden>
+          <div class="engines-top">
+            <button class="btn btn-ghost" id="btn-back" type="button"></button>
+            <h2 data-i18n="engines_title"></h2>
+          </div>
+          <ul class="engine-list" id="engine-list"></ul>
+        </section>
+      </main>
+    </div>
+
+    <input id="file-input" type="file" multiple hidden />
+    <input id="folder-input" type="file" webkitdirectory multiple hidden />
+
+    <dialog id="dialog">
+      <h2 id="dialog-title"></h2>
+      <pre id="dialog-body"></pre>
+      <button class="btn" id="dialog-close" type="button" data-i18n="close"></button>
+    </dialog>
+
+    <noscript><span data-i18n="js_required">Triton needs JavaScript to run.</span></noscript>
+  </body>
+</html>

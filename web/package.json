@@ -1,0 +1,26 @@
+{
+  "name": "triton-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "jszip": "^3.10.2",
+    "mammoth": "^1.13.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.4.299",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

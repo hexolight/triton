@@ -9,6 +9,13 @@
 Bilgisayarda yerel çalışan, çok formatlu dosya dönüştürücü. İnternete dosya
 göndermez — tüm dönüşümler kendi makinenizde yapılır.
 
+### Web sürümü
+
+Aynı arayüzün tarayıcıda çalışan hâli: **[triton-app.vercel.app](https://triton-app.vercel.app)**.
+Dosyalar sunucuya yüklenmez, dönüşüm tarayıcıda yapılır (kaynak: [`web/`](web)).
+Masaüstü sürümünden farkları: PowerPoint, eski `.doc/.ppt/.rtf` ve `.odp` yok; PDF → Word yalnızca metni
+taşır; video/ses için FFmpeg (≈30 MB) ilk kullanımda indirilir, masaüstüne göre yavaştır ve dosya başına 1 GB sınırı vardır.
+
 ### Desteklenen formatlar
 
 - **Video:** mp4, mkv, avi, mov, webm, flv, wmv, m4v, mpg, ts, 3gp (+ videodan ses çıkarma)
@@ -81,6 +88,13 @@ kullanılabilir. Ayrıntılar için [LICENSE](LICENSE) dosyasına bakın.
 
 A local, multi-format file converter for your computer. It never sends
 files anywhere — every conversion runs on your own machine.
+
+### Web version
+
+The same interface in the browser: **[triton-app.vercel.app](https://triton-app.vercel.app)**.
+Files are not uploaded; conversion runs in your browser (source: [`web/`](web)).
+Differences from the desktop app: no PowerPoint, legacy `.doc/.ppt/.rtf` or `.odp`; PDF → Word carries text only;
+video/audio use FFmpeg (≈30 MB) downloaded on first use, which is slower than desktop and capped at 1 GB per file.
 
 ### Supported formats
 
